@@ -61,11 +61,32 @@ def idiv2(v):
     return -((-v + 1)//2) if v < 0 else v//2
 
 
-def spec_layout(w, h):
-    board_x = idiv2(w - 108)
-    board_y = idiv2(h - 234) + 234
+# The two competing layout hypotheses.
+#
+#   "centred"  -- what the screenshots show: the board frame is centred
+#                 horizontally and centred in the area *below* the HUD bar.
+#                 This is what the re-implementation does today.
+#   "legacy"   -- what the binary's constants suggest: board origin
+#                 X = (right - 0x6C) / 2, Y = (bottom - 0xEA) / 2 + 0xEA.
+#
+# Both are reported by `analyze.py shot`, so a 100%-scale screenshot on the
+# Windows machine settles which one the original really uses -- the two
+# disagree by a large, easily visible amount.
+MENU_BAR_H = 32
+HUD_H = 64
+BOARD_FRAME_W = 327
+BOARD_FRAME_H = 328
+
+
+def spec_layout(w, h, model="centred"):
+    """The predicted board origin and the right figure's X."""
     t = idiv2(w - 328)
     panel_x = t + 328 + idiv2(t - 58)
+    if model == "legacy":
+        return idiv2(w - 108), idiv2(h - 234) + 234, panel_x
+    top = MENU_BAR_H + HUD_H
+    board_x = idiv2(w - BOARD_FRAME_W)
+    board_y = top + idiv2(h - top - BOARD_FRAME_H)
     return board_x, board_y, panel_x
 
 
@@ -196,11 +217,24 @@ def cmd_shot(a):
 
     ox, oy = m["board_origin"]
     # the client area of the screenshot is assumed to be the whole image
-    px, py, ppx = spec_layout(w, h)
+    px, py, ppx = spec_layout(w, h, "centred")
+    lx, ly, _ = spec_layout(w, h, "legacy")
     print("  measured board origin : (%d, %d)" % (ox, oy))
-    print("  predicted board origin: (%d, %d)   [client %dx%d]" % (px, py, w, h))
-    rep.add("board origin X", px, ox, "delta %+d" % (ox - px))
-    rep.add("board origin Y", py, oy, "delta %+d" % (oy - py))
+    print("  hypothesis 'centred'  : (%d, %d)   delta %+d / %+d"
+          % (px, py, ox - px, oy - py))
+    print("  hypothesis 'legacy'   : (%d, %d)   delta %+d / %+d"
+          % (lx, ly, ox - lx, oy - ly))
+    # The report states which hypothesis the measurement supports; it does
+    # not fail on the legacy one, because the point of the run is to decide.
+    rep.add("board origin X (centred hypothesis)", px, ox, "delta %+d" % (ox - px))
+    rep.add("board origin Y (centred hypothesis)", py, oy, "delta %+d" % (oy - py))
+    rep.add_bool("the centred hypothesis fits",
+                 abs(ox - px) <= 4 and abs(oy - py) <= 4,
+                 expected="|delta| <= 4", measured="dx %+d, dy %+d" % (ox - px, oy - py))
+    rep.add_bool("the legacy hypothesis fits",
+                 abs(ox - lx) <= 4 and abs(oy - ly) <= 4,
+                 expected="|delta| <= 4", measured="dx %+d, dy %+d" % (ox - lx, oy - ly),
+                 note="docs/11 section 5d: the binary constant is still unidentified")
     rep.add("cell size px", SPEC["cell_px"], m["cell_px"])
     rep.add("grid side", SPEC["board_side"], m["grid_side"])
     rep.add("board frame width", SPEC["board_frame_w"],

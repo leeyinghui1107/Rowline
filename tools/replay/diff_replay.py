@@ -23,8 +23,17 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, HERE)
 import model as M
 
-C_BIN = os.path.join(ROOT, "build", "rowline-replay")
-RUST_BIN = os.path.join(ROOT, "rust", "target", "release", "rowline-replay")
+def _find(rel):
+    """The binary, with or without the Windows executable suffix."""
+    base = os.path.join(ROOT, rel)
+    for cand in (base, base + ".exe"):
+        if os.path.exists(cand):
+            return cand
+    return base
+
+
+C_BIN = _find(os.path.join("build", "rowline-replay"))
+RUST_BIN = _find(os.path.join("rust", "target", "release", "rowline-replay"))
 
 
 def run_python(seed, board, ops):
