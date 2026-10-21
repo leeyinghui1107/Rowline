@@ -78,7 +78,7 @@ Rust 侧：
 ```bash
 cd rust
 cargo build --release --workspace --all-features
-cargo test --release --workspace --all-features     # 127 项（含 doc-test）
+cargo test --release --workspace --all-features     # 140 项（含 doc-test）
 cargo clippy --workspace --all-features -- -D warnings
 ```
 
