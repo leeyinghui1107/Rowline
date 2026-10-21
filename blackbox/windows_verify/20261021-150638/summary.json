@@ -1,9 +1,9 @@
 ﻿{
-    "generated_at":  "2026-10-21T15:21:11.9126183+08:00",
+    "generated_at":  "2026-10-21T15:26:28.1434583+08:00",
     "repo":  "D:\\source\\09_my\\Rowline",
     "ok":  true,
-    "passed":  8,
-    "total":  8,
+    "passed":  9,
+    "total":  9,
     "versions":  {
                      "python":  "Python 3.14.7",
                      "cargo":  "cargo 1.99.1 (5f94df478 2026-08-27)",
@@ -63,6 +63,12 @@
                        "ok":  true,
                        "detail":  "summary exit=0, check exit=0",
                        "log":  "blackbox\\windows_verify\\20261021-150638\\logs\\checklist-summary.log"
+                   },
+                   {
+                       "name":  "rowline-dpi-probe reads the display environment",
+                       "ok":  true,
+                       "detail":  "\\\\.\\DISPLAY1 3120x2080px scale 2.00",
+                       "log":  "blackbox\\windows_verify\\20261021-150638\\logs\\dpi-probe.log"
                    }
                ]
 }

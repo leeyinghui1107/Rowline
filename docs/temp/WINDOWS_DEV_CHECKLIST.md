@@ -130,7 +130,7 @@
 
 | 资产 | 位置 | 说明 |
 |---|---|---|
-| **Windows 一键自检** | `tools/win/verify.ps1` | 工具链定位 + 全部门禁 + 证据归档（8 项检查，见 §9） |
+| **Windows 一键自检** | `tools/win/verify.ps1` | 工具链定位 + 全部门禁 + 证据归档（9 项检查，见 §9） |
 | Makefile Windows 兼容 | `Makefile` | `.exe` 后缀、make 级 Rust 门禁判断、Python 建目录；`make shot` 的 `SHOT_BIN` 顺序 bug 已修 |
 | UTF-8 文本 I/O | `tools/**/*.py` | 所有 `open()` 显式 `encoding="utf-8"`，避免 CP936 解码失败 |
 | 布局**双假设**报告 | `tools/blackbox/analyze.py` | 截图符合性同时给出 `centred`（截图所见）与 `legacy`（二进制常量）两套预测及 delta，并明确判定哪个成立（两者差 110/233 px，肉眼可辨） |
@@ -320,7 +320,7 @@ blackbox/
 
 ### 9.1 已在本机完成（2026-10-21）
 
-证据目录：`blackbox/windows_verify/20261021-150638/`（`summary.json`：**8/8 PASS**）
+证据目录：`blackbox/windows_verify/20261021-150638/`（`summary.json`：**9/9 PASS**）
 
 | 检查 | 结果 | 证据 |
 |---|---|---|
@@ -332,6 +332,7 @@ blackbox/
 | `winprobe.c`（MinGW gcc） | ✅ 编译通过（`build/winprobe.exe`） | `logs/winprobe.log` |
 | 黑盒管线 `simulate.py` → `analyze.py shot` | ✅ 模拟图 1024×768，`centred` delta `+0/+0`，7 种颜色全部识别 | `shot/conformance_shot.json` |
 | `checklist.py summary/check`（UTF-8） | ✅ 54 项正常加载，`all items consistent` | `logs/checklist-summary.log` |
+| `rowline-dpi-probe`（真实显示器） | ✅ 读到 1 台显示器：3120×2080 px，**scale 2.00**（200%） | `logs/dpi-probe.log` |
 
 - [x] Windows 上 `cargo test --release --workspace --all-features` 全绿
 - [x] Windows 上 `make PYTHON=... CC=gcc test` → `RESULT: ALL MATCH`
@@ -339,6 +340,7 @@ blackbox/
 - [x] `rowline-shot` 在 Windows 上跑通（CJK 优先命中 `msyh`，拉丁回退 `Arial`）
 - [x] `winprobe.exe` 可在 Windows 上编译
 - [x] 黑盒工具链（`simulate.py` / `analyze.py` / `checklist.py`）在 Windows 上跑通
+- [x] `rowline-dpi-probe` 读到真实显示器 DPI（本机 200%）
 
 ### 9.2 仍待完成（需要原作或真实显示器）
 

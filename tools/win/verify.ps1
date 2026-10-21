@@ -333,6 +333,24 @@ $chkOk = ($sumCode -eq 0) -and ($chkCode -eq 0)
 Add-Result 'checklist.py loads and is consistent' $chkOk "summary exit=$sumCode, check exit=$chkCode" $sumLog
 $ok = $chkOk -and $ok
 
+# Read the real per-monitor DPI through the platform layer.  This is the
+# product-side check from the checklist; it needs a desktop session.
+Write-Step 'rowline-dpi-probe (real display DPI)'
+$dpiLog = Join-Path $LogDir 'dpi-probe.log'
+$dpiArgs = @('run', '--release', '-p', 'rowline-tools', '--features', 'dpi',
+             '--bin', 'rowline-dpi-probe')
+$dpiCode = Invoke-Native -Exe $cargoExe -Arguments $dpiArgs -Log $dpiLog -WorkDir $cargoDir
+$dpiText = if (Test-Path $dpiLog) { Get-Content $dpiLog -Raw -Encoding UTF8 } else { '' }
+$dpiOk = ($dpiCode -eq 0) -and ($dpiText -match 'monitor\(s\)')
+$monitor = ([regex]::Match($dpiText, '(?m)^\s+monitor\s+(\S+)\s+(\d+x\d+)\s+px\s+scale\s+([\d.]+)'))
+$dpiDetail = if ($monitor.Success) {
+    "$($monitor.Groups[1].Value) $($monitor.Groups[2].Value)px scale $($monitor.Groups[3].Value)"
+} else {
+    "exit=$dpiCode"
+}
+Add-Result 'rowline-dpi-probe reads the display environment' $dpiOk $dpiDetail $dpiLog
+$ok = $dpiOk -and $ok
+
 # ------------------------------------------------------------------ summary
 Write-Step 'summary'
 $total = $Results.Count
