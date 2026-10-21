@@ -36,6 +36,8 @@ enum Scenario {
     GameOver,
     /// A game in progress with the statistics window open.
     Stats,
+    /// A just-completed five-ball clear, captured mid-dissolve.
+    Clear,
 }
 
 fn main() {
@@ -64,6 +66,7 @@ fn main() {
                     "about" => Scenario::About,
                     "gameover" => Scenario::GameOver,
                     "stats" => Scenario::Stats,
+                    "clear" => Scenario::Clear,
                     _ => Scenario::New,
                 }
             }
@@ -71,7 +74,7 @@ fn main() {
                 eprintln!(
                     "usage: rowline-shot [--out FILE] [--width N] [--height N] \
                      [--scale N] [--theme dark|light] [--scenario new|board|\
-                     scoreboard|about|gameover|stats] [--seed N]"
+                     scoreboard|about|gameover|stats|clear] [--seed N]"
                 );
                 return;
             }
@@ -91,6 +94,7 @@ fn main() {
         game.set_sheet_scale(*sheet_scale);
     }
 
+    let layout = Layout::compute(width as i32, height as i32);
     match scenario {
         Scenario::New => {}
         Scenario::Board => {
@@ -111,9 +115,26 @@ fn main() {
             game.engine_mut().new_game();
             game.run_command(rowline_app::commands::Command::TOGGLE_STATISTICS);
         }
+        Scenario::Clear => {
+            // Four in a row plus a source ball one cell below the gap: the
+            // move completes five and starts the dissolve.
+            {
+                let b = game.engine_mut().board_mut();
+                b.cells_mut().fill(0);
+                for c in 0..4 {
+                    b.set(4, c, 1);
+                }
+                b.set(5, 4, 1);
+            }
+            let cell = |r: i32, c: i32| {
+                let (x, y) = layout.cell_origin(r, c);
+                rowline_core::input::Point::new(x as f32 + 18.0, y as f32 + 18.0)
+            };
+            game.click_at(cell(5, 4), layout);
+            game.click_at(cell(4, 4), layout);
+        }
     }
 
-    let layout = Layout::compute(width as i32, height as i32);
     let cmds = frame(&game, layout);
 
     // ---- rasterise ------------------------------------------------------

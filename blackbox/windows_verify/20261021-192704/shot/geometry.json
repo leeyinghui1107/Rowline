@@ -6,7 +6,7 @@
  "cell_px": 36,
  "sprite_px": 32,
  "inset": 2,
- "coloured_pixels": 45041,
+ "coloured_pixels": 47684,
  "frame_candidates": 1,
  "board_origin": [
   348,
@@ -22,12 +22,12 @@
  "grid_side": 9,
  "coverage": 1.0,
  "first_coloured_px": [
-  354,
-  248
+  353,
+  247
  ],
  "sprite_pad": [
-  4,
-  4
+  3,
+  3
  ],
  "board_px": [
   324,

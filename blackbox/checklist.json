@@ -26,9 +26,11 @@
    "criteria": "记录带勾选的项"
   },
   "BB-M03": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:\\bb\\run1\\menu.json"
+   ],
+   "notes": "All 9 original commands enabled; checked states mirror INI (512 checked, 513/514 unchecked)",
    "owner": "",
    "group": "菜单",
    "title": "每个菜单项点击后的行为",
@@ -36,9 +38,11 @@
    "criteria": "记录是否弹窗/改棋盘/改配置"
   },
   "BB-M04": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:\\bb\\run1\\menu.json"
+   ],
+   "notes": "No submenus: both popups contain only leaf items and separators",
    "owner": "",
    "group": "菜单",
    "title": "子菜单展开延迟与层级",
@@ -82,9 +86,11 @@
    "criteria": "建立按键→功能映射表"
   },
   "BB-K02": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:\\bb\\shots\\stats_client.png"
+   ],
+   "notes": "F5 posted to the main window toggled the statistics window open and closed while it was the only popup",
    "owner": "",
    "group": "按键",
    "title": "快捷键在不同窗口焦点下是否生效",
@@ -104,9 +110,11 @@
    "criteria": "记录选中/移动/落子反馈"
   },
   "BB-K04": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:\\bb\\shots\\dbl_after.png"
+   ],
+   "notes": "No GetMessageTime call site; double-click is just two normal clicks in the two-click model",
    "owner": "",
    "group": "按键",
    "title": "双击行为",
@@ -114,9 +122,11 @@
    "criteria": "与两次单击是否不同"
   },
   "BB-K05": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:\\bb\\shots\\hover_before.png"
+   ],
+   "notes": "Press-move-release from a ball to an empty cell left the board unchanged (drag is not a move)",
    "owner": "",
    "group": "按键",
    "title": "拖拽行为",
@@ -124,9 +134,11 @@
    "criteria": "是否支持拖拽"
   },
   "BB-K06": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:\\bb\\shots\\hover_after.png"
+   ],
+   "notes": "Original: WM_MOUSEMOVE caused 0 changed pixels (no board hover). Re-design adds a hover ring + path preview",
    "owner": "",
    "group": "按键",
    "title": "鼠标悬停效果",
@@ -134,9 +146,11 @@
    "criteria": "悬停高亮规则"
   },
   "BB-K07": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:\\bb\\winlinez_disasm.txt"
+   ],
+   "notes": "Dispatch handles only WM_LBUTTONDOWN/UP (0x201/0x202); no right/middle handler",
    "owner": "",
    "group": "按键",
    "title": "右键 / 中键行为",
@@ -144,9 +158,11 @@
    "criteria": "是否有上下文菜单"
   },
   "BB-K08": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "analysis\\menu_accel.txt"
+   ],
+   "notes": "Accelerators: F1/F3/F4/F5/F6 and Alt+F9 only; no Ctrl/Shift combinations",
    "owner": "",
    "group": "按键",
    "title": "鼠标移出窗口",
@@ -274,9 +290,11 @@
    "criteria": "是否随机补球、何时补"
   },
   "BB-G09": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:\\bb\\shots\\select_after.png"
+   ],
+   "notes": "Selected cell gets an inner highlight (35x31 px change) and animates; implementation draws an accent ring + path preview",
    "owner": "",
    "group": "规则",
    "title": "选中态与路径高亮的视觉表现",
@@ -284,9 +302,11 @@
    "criteria": "高亮颜色、线宽、是否带箭头"
   },
   "BB-G10": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:\\bb\\shots\\clear5"
+   ],
+   "notes": "Two dissolve passes with Sleep(50) at 0x401C48; frames f8-f12 show the 2x50 ms dissolve, f15-f21 the 420 ms winner animation",
    "owner": "",
    "group": "规则",
    "title": "消除动画时序",
@@ -594,9 +614,11 @@
    "criteria": "触发区域与文本"
   },
   "BB-U10": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "docs\\05_ART_SPEC.md"
+   ],
+   "notes": "Sprites 32x32 inside 36 px cells (2 px inset); icons 24x24 design grid",
    "owner": "",
    "group": "UI",
    "title": "图标与标题",
@@ -616,9 +638,11 @@
    "criteria": "`名次. 姓名` 格式与列宽"
   },
   "BB-U12": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "analysis\\pe_triage.txt"
+   ],
+   "notes": "GetSysColor is imported but the UI is redrawn from theme tokens (re-design); dialogs use system colours",
    "owner": "",
    "group": "UI",
    "title": "系统主题跟随",

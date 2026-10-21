@@ -100,15 +100,19 @@ def shade(c, f):
 
 
 def draw_sphere(cv, cx, cy, rad, col):
-    """Sphere with a highlight and a rim shadow."""
-    for y in range(cy-rad-1, cy+rad+2):
-        for x in range(cx-rad-1, cx+rad+2):
+    """Sphere with a highlight and a rim shadow.
+
+    `cx` / `cy` are floats so that a 32 px ball can sit exactly inside the
+    36 px cell's 2 px inset (pixel centres are at half-integers).
+    """
+    for y in range(int(math.floor(cy - rad)) - 1, int(math.ceil(cy + rad)) + 2):
+        for x in range(int(math.floor(cx - rad)) - 1, int(math.ceil(cx + rad)) + 2):
             dx, dy = x - cx, y - cy
             d = math.hypot(dx, dy)
-            if d > rad + 0.5:
+            if d > rad:
                 continue
-            if d > rad - 0.5:
-                cv.blend(x, y, shade(col, 0.55), 1.0 - (d - (rad - 0.5)))
+            if d > rad - 1.0:
+                cv.blend(x, y, shade(col, 0.55), 1.0 - (d - (rad - 1.0)))
                 continue
             nz = math.sqrt(max(0.0, 1.0 - (d/rad)**2))
             lx, ly = dx - rad*0.35, dy - rad*0.4
@@ -181,7 +185,10 @@ def build_sheet(scale=1):
             continue
         if col <= 7:
             c = COLORS[col-1]
-            draw_sphere(cv, x0+CELL//2, y0+CELL//2, max(1, SPRITE//2 - scale), c)
+            # A 32 px ball inside the 36 px cell: radius 16 reaches the
+            # 2 px inset on both sides.  The half-pixel centre keeps the
+            # rim symmetric inside the 32 px slot.
+            draw_sphere(cv, x0 + CELL/2 - 0.5, y0 + CELL/2 - 0.5, SPRITE/2, c)
         else:
             c = COLORS[col-9]
             draw_poly(cv, x0+CELL//2, y0+CELL//2, max(1, SPRITE//2 - 2*scale),

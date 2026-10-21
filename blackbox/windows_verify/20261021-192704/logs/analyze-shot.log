@@ -13,13 +13,13 @@
     MAGENTA  0        MAGENTA  0        BLUE     YELLOW   MAGENTA  0        CYAN    
     MAGENTA  RED      BLUE     RED      0        YELLOW   MAROON   0        0       
   distinct colours observed: 7 -> BLUE, CYAN, GREEN, MAGENTA, MAROON, RED, YELLOW
-    BLUE       #0000A8
-    CYAN       #00A8A8
-    GREEN      #009500
-    MAGENTA    #A800A8
-    MAROON     #8D0000
-    RED        #A80000
-    YELLOW     #A8A800
+    BLUE       #2626E8
+    CYAN       #26E8E8
+    GREEN      #0FBE0F
+    MAGENTA    #E826E8
+    MAROON     #7D0000
+    RED        #E82626
+    YELLOW     #E8E826
 
   ITEM                               EXPECTED               MEASURED               RESULT
   ----------------------------------------------------------------------------------------------
@@ -35,4 +35,4 @@
   colour names all known             known names            BLUE,CYAN,GREEN,MAGENT OK
   ----------------------------------------------------------------------------------------------
   10 checks, 10 match, 0 differ
-  -> D:\source\09_my\Rowline\blackbox\windows_verify\20261021-185131\shot
+  -> D:\source\09_my\Rowline\blackbox\windows_verify\20261021-192704\shot

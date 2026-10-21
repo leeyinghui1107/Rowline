@@ -6,5 +6,5 @@ wl-dpi-probe: display environment
 
   1 monitor(s)
    Compiling rowline-tools v0.1.0 (D:\source\09_my\Rowline\rust\crates\tools)
-    Finished `release` profile [optimized] target(s) in 2.74s
+    Finished `release` profile [optimized] target(s) in 2.76s
      Running `target\release\rowline-dpi-probe.exe`

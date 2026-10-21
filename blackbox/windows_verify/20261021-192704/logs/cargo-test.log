@@ -1,22 +1,24 @@
 
-running 15 tests
+running 17 tests
 test commands::tests::accelerators_match_the_original ... ok
+test commands::tests::the_menu_covers_every_command ... ok
+test game::tests::the_board_has_a_backdrop_and_one_plate_per_cell ... ok
 test game::tests::a_losing_score_does_not_open_the_name_entry ... ok
 test game::tests::exit_command_requests_quit ... ok
-test game::tests::the_board_has_a_backdrop_and_one_plate_per_cell ... ok
-test game::tests::the_hud_shows_the_cpu_on_the_left_and_the_player_on_the_right ... ok
-test game::tests::the_game_over_dialog_appears_when_there_is_no_move ... ok
-test commands::tests::every_command_has_an_icon ... ok
-test game::tests::the_hud_shows_three_preview_balls ... ok
-test commands::tests::the_menu_covers_every_command ... ok
-test game::tests::the_leaderboard_shows_sixteen_rows_and_the_empty_placeholder ... ok
 test game::tests::new_game_resets_the_selection ... ok
+test commands::tests::every_command_has_an_icon ... ok
+test game::tests::a_clear_dissolves_in_two_steps ... ok
+test game::tests::the_game_over_dialog_appears_when_there_is_no_move ... ok
+test game::tests::the_hud_shows_the_cpu_on_the_left_and_the_player_on_the_right ... ok
+test game::tests::the_hud_shows_three_preview_balls ... ok
+test game::tests::hovering_previews_the_path_from_the_selected_ball ... ok
 test game::tests::the_name_entry_starts_with_the_originals_default_name ... ok
+test game::tests::the_leaderboard_shows_sixteen_rows_and_the_empty_placeholder ... ok
 test game::tests::the_score_is_only_inserted_when_the_game_is_over ... ok
 test game::tests::the_statistics_panel_is_opt_in_and_lists_every_slot ... ok
 test game::tests::toggles_flip_the_settings ... ok
 
-test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
 
 running 0 tests
@@ -25,36 +27,36 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 
 running 4 tests
-test tests::variant_names_follow_the_convention ... ok
-test tests::ball_source_scales_with_the_sheet ... ok
 test tests::ball_source_follows_the_index_contract ... ok
+test tests::ball_source_scales_with_the_sheet ... ok
 test tests::lanczos_upscale_doubles_the_image ... ok
+test tests::variant_names_follow_the_convention ... ok
 
 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
 
 running 65 tests
-test board::tests::out_of_bounds_access_is_safe ... ok
 test board::tests::round_trips_through_the_trace_string ... ok
-test effects::tests::a_huge_dt_cannot_teleport_the_particles ... ok
+test effects::tests::the_opacity_fades_out ... ok
+test effects::tests::a_burst_creates_particles ... ok
 test effects::tests::particles_die ... ok
 test effects::tests::the_burst_is_reproducible ... ok
-test effects::tests::a_burst_creates_particles ... ok
-test effects::tests::the_opacity_fades_out ... ok
-test engine::tests::new_game_places_exactly_five_balls ... ok
+test effects::tests::a_huge_dt_cannot_teleport_the_particles ... ok
 test engine::tests::an_illegal_move_is_reported ... ok
-test engine::tests::taking_a_ball_rolls_a_replacement ... ok
+test engine::tests::a_new_game_resets_the_per_colour_statistics ... ok
+test engine::tests::new_game_places_exactly_five_balls ... ok
 test effects::tests::the_burst_is_bounded ... ok
 test engine::tests::a_clear_counts_the_eliminated_balls_per_colour ... ok
-test engine::tests::a_new_game_resets_the_per_colour_statistics ... ok
+test engine::tests::taking_a_ball_rolls_a_replacement ... ok
+test board::tests::out_of_bounds_access_is_safe ... ok
 test engine::tests::the_next_group_holds_three_balls ... ok
-test input::tests::modifiers_start_empty ... ok
 test layout::tests::a_click_outside_the_board_misses ... ok
 test layout::tests::a_tiny_client_is_clamped ... ok
+test input::tests::modifiers_start_empty ... ok
 test layout::tests::the_board_is_centred_horizontally ... ok
 test layout::tests::the_board_matches_the_originals_formula ... ok
-test layout::tests::the_figure_y_matches_the_originals_formula ... ok
 test layout::tests::the_figures_flank_the_board ... ok
+test layout::tests::the_figure_y_matches_the_originals_formula ... ok
 test layout::tests::the_figures_match_the_originals_formula ... ok
 test layout::tests::the_grid_round_trips ... ok
 test layout::tests::the_minimum_client_size_is_the_smallest_fitting_one ... ok
@@ -104,17 +106,17 @@ test result: ok. 65 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fin
 
 
 running 11 tests
-test viewport::tests::fixed_policy_prefers_integer_scales ... ok
-test resample::tests::lanczos_preserves_a_flat_colour ... ok
-test resample::tests::identical_sizes_are_a_no_op ... ok
-test resample::tests::lanczos_output_size_is_correct ... ok
+test resample::tests::variant_selection_prefers_the_smallest_sufficient_one ... ok
 test viewport::tests::fixed_policy_can_allow_fractional_scales ... ok
-test viewport::tests::a_zero_scale_factor_does_not_divide_by_zero ... ok
-test viewport::tests::fixed_policy_letterboxes_and_keeps_the_aspect_ratio ... ok
+test resample::tests::lanczos_output_size_is_correct ... ok
 test resample::tests::kernel_is_normalised ... ok
+test viewport::tests::fixed_policy_letterboxes_and_keeps_the_aspect_ratio ... ok
+test resample::tests::lanczos_preserves_a_flat_colour ... ok
+test viewport::tests::fixed_policy_prefers_integer_scales ... ok
+test resample::tests::identical_sizes_are_a_no_op ... ok
 test viewport::tests::fractional_dpi_is_handled ... ok
 test viewport::tests::logical_policy_fills_the_window ... ok
-test resample::tests::variant_selection_prefers_the_smallest_sufficient_one ... ok
+test viewport::tests::a_zero_scale_factor_does_not_divide_by_zero ... ok
 
 test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
@@ -127,12 +129,12 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 running 9 tests
 test canvas::tests::a_clear_fills_the_canvas ... ok
-test canvas::tests::a_rectangle_is_drawn_at_the_right_place ... ok
 test canvas::tests::the_viewport_moves_the_content ... ok
 test font::tests::a_broken_font_is_rejected ... ok
+test canvas::tests::a_rectangle_is_drawn_at_the_right_place ... ok
 test tests::recorder_captures_frames ... ok
-test font::tests::glyphs_are_rasterised_at_the_device_resolution ... ok
 test font::tests::the_atlas_image_actually_holds_the_glyphs ... ok
+test font::tests::glyphs_are_rasterised_at_the_device_resolution ... ok
 test canvas::text_tests::text_is_drawn ... ok
 test font::tests::the_atlas_grows_when_it_runs_out_of_room ... ok
 
@@ -142,27 +144,27 @@ test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 running 6 tests
 test tests::a_missing_save_yields_the_defaults ... ok
 test tests::the_extension_is_ron ... ok
-test tests::a_save_round_trips_through_the_store ... ok
-test tests::the_legacy_importer_validates_the_length ... ok
-test tests::the_legacy_importer_reads_names_and_scores ... ok
 test tests::ron_round_trips ... ok
+test tests::a_save_round_trips_through_the_store ... ok
+test tests::the_legacy_importer_reads_names_and_scores ... ok
+test tests::the_legacy_importer_validates_the_length ... ok
 
 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
 
 running 25 tests
+test contrast::tests::ball_colours_are_all_distinct ... ok
+test motion::tests::reduced_motion_collapses_every_duration ... ok
+test contrast::tests::ball_colours_are_distinguishable_in_greyscale ... ok
+test motion::tests::the_curves_are_monotonic_where_they_should_be ... ok
+test contrast::tests::light_theme_text_meets_aa ... ok
+test motion::tests::every_curve_is_anchored_at_the_ends ... ok
 test contrast::tests::accent_text_meets_aa_on_its_own_surface ... ok
+test motion::tests::out_back_overshoots ... ok
 test contrast::tests::known_contrast_values ... ok
 test contrast::tests::dark_theme_text_meets_aa ... ok
-test contrast::tests::ball_colours_are_distinguishable_in_greyscale ... ok
 test contrast::tests::ball_colours_are_distinguishable_from_the_board ... ok
-test contrast::tests::light_theme_text_meets_aa ... ok
-test motion::tests::out_back_overshoots ... ok
 test motion::tests::progress_reaches_one_at_the_end ... ok
-test motion::tests::the_curves_are_monotonic_where_they_should_be ... ok
-test contrast::tests::ball_colours_are_all_distinct ... ok
-test motion::tests::every_curve_is_anchored_at_the_ends ... ok
-test motion::tests::reduced_motion_collapses_every_duration ... ok
 test palette::tests::ball_lookup_is_stable ... ok
 test palette::tests::every_theme_has_its_own_board_variant ... ok
 test palette::tests::greyscale_preserves_luminance ... ok
@@ -244,7 +246,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 running 1 test
 test crates\theme\src\lib.rs - (line 14) ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.23s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.22s
 
     Finished `release` profile [optimized] target(s) in 0.12s
      Running unittests src\lib.rs (target\release\deps\rowline_app-4ce49d4f8f302098.exe)

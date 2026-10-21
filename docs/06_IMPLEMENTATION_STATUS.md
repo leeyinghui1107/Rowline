@@ -1,7 +1,7 @@
 # 06 · 实施状态
 
 > 对照 `docs/04_FIDELITY_MATRIX.md` 的 M1–M6 里程碑。
-> 最近一次全量验证：**Rust 138 项测试通过 · 零编译警告 · clippy `-D warnings --all-targets` 通过 · 四方差分门 ALL MATCH · 布局门 PASSED**。
+> 最近一次全量验证：**Rust 140 项测试通过 · 零编译警告 · clippy `-D warnings --all-targets` 通过 · 四方差分门 ALL MATCH · 布局门 PASSED**。
 
 ---
 
@@ -68,6 +68,8 @@
 | **高分榜窗口**（总榜 / 清除 / 确定） | ✅ | `app/src/game.rs` |
 | **名称输入窗口**（预填「挑战者」） | ✅ | `app/src/game.rs` |
 | **统计窗口**（空格子 + 7 色：数量/百分比/`消除-N`，默认关闭） | ✅ | `core::engine` + `app::game::stats_panel` |
+| **消除动画**（2 × 50 ms 溶解 + 420 ms 胜利立绘） | ✅ | `app::game::{clear_animation_commands, win_lift}` |
+| **棋盘悬停环与最短路预览**（重设计） | ✅ | `Game::update_hover` + `hover_commands` |
 | **关于对话框** | ✅ | `app/src/game.rs` |
 | **无路可走判定** | ✅ | `core::rules::has_legal_move()` |
 
@@ -81,7 +83,7 @@
 | GitHub Actions（rust / C / 差分门 / 资产可复现） | ✅ | `.github/workflows/ci.yml` |
 | 打包脚本（平台 bundle + README） | ✅ | `tools/package.py` |
 | 零编译警告 | ✅ | `cargo build --workspace --all-features` |
-| **Windows 工具链自检**（cargo build/test + make test/shot + winprobe + 黑盒管线 + DPI 探针，证据归档） | ✅ 9/9 | `tools/win/verify.ps1` · `blackbox/windows_verify/20261021-185131/` |
+| **Windows 工具链自检**（cargo build/test + make test/shot + winprobe + 黑盒管线 + DPI 探针，证据归档） | ✅ 9/9 | `tools/win/verify.ps1` · `blackbox/windows_verify/20261021-192704/` |
 
 ---
 
@@ -140,7 +142,7 @@
 | ~~统计窗口（分数明细）~~ | ✅ 已实机确认并实现：8 行、`count (percent%)`、`,消除-N` | docs/11 §5e |
 | 角色像的**原作外观** | 用自制"纹章 + 底座"代替（红冕章 / 品红剑章） | 原作角色像素属受版权保护的美术，**不得复用**（REPORT.md R2）；如需更接近的造型，须由美术重新创作 |
 | ~~棋盘原点的常量语义~~ | ✅ 已确认 `0x40B060/64` 为棋盘原点，`0x40B078/7C` 为预览球组 | docs/11 §5d |
-| 消除动画的多步时序 | 当前是瞬时消除 + 粒子 | 依赖 `BB-G10` 的时序数据 |
+| ~~消除动画的多步时序~~ | ✅ 已由 `clear5` 连拍 + `0x401C48` 确认：2 × 50 ms 溶解 + 420 ms 胜利立绘 | docs/11 §5f |
 | 音效 | 原作无音频；若新增属功能扩展 | 需单独立项与授权评估 |
 | i18n | 界面固定为**简体中文**（与原作一致） | 文案集中在 `core::menu` 与 `app::commands`；如需英文版须另做一套并处理字体回退 |
 | ~~浅色主题的棋盘底纹~~ | ✅ 已加 `board_backdrop` / `board_cell`（暖纸底 + 米色格子） | `theme::Palette` |

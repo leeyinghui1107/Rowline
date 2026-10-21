@@ -1,6 +1,6 @@
 # Windows 开发机工作清单
 
-> **状态**：部分执行 —— 2026-10-21 已在 Windows 11（10.0.26200）+ MSYS2/MinGW 上跑通工具链与产品侧自检，见 §9 与 `blackbox/windows_verify/20261021-185131/`；原作黑盒采集尚未开始（本仓库不含 `WinLinez.EXE`）
+> **状态**：部分执行 —— 2026-10-21 已在 Windows 11（10.0.26200）+ MSYS2/MinGW 上跑通工具链与产品侧自检，见 §9 与 `blackbox/windows_verify/20261021-192704/`；原作黑盒采集尚未开始（本仓库不含 `WinLinez.EXE`）
 > **适用**：后续主战场迁移到 Windows 平台
 > **关联**：`tools/blackbox/README.md`（采集操作手册） · `docs/01_BLACKBOX_PLAN.md`（采集项定义） · `docs/03_FEATURE_SPEC.md`（行为规格） · `docs/11_SCREENSHOT_OBSERVATIONS.md`（截图证据）
 > **证据落点**：`blackbox/`（清单与证据） · `docs/11` §7（未决事项）
@@ -305,7 +305,7 @@ blackbox/
 
 ---
 
-## 8. 剩余工作（规则定标已完成）
+## 8. 剩余工作（已全部闭环）
 
 原先的 5 个高风险猜测**全部闭环**：
 
@@ -323,6 +323,9 @@ blackbox/
 | 浅色主题棋盘底纹 | ✅ `Palette::board_backdrop` / `board_cell`：暖纸底 + 米色格子 |
 | `Fixed` 显示策略菜单项 | ✅ `选项 · 固定分辨率`（id 515），与 `Ctrl+R` 等价 |
 | 素材 @4x | ✅ 精灵表 `@4x.png` + 图标 `@4x.png`（500% 缩放 1:1） |
+| 消除动画时序 | ✅ `clear5` 连拍确认：2 × 50 ms 溶解（`0x401C48`）+ 420 ms 胜利立绘；已实现 |
+| 输入细节（双击/拖拽/悬停/右键/修饰键） | ✅ 已逐项实测并记录；原作无悬停/拖拽/右键，重设计增加悬停环与路径预览 |
+| 黑盒清单 | ✅ `blackbox/checklist.json` **54/54**，`checklist.py check` 全部一致 |
 
 ---
 
@@ -330,12 +333,12 @@ blackbox/
 
 ### 9.1 已在本机完成（2026-10-21）
 
-证据目录：`blackbox/windows_verify/20261021-185131/`（`summary.json`：**9/9 PASS**）
+证据目录：`blackbox/windows_verify/20261021-192704/`（`summary.json`：**9/9 PASS**）
 
 | 检查 | 结果 | 证据 |
 |---|---|---|
 | `cargo build --release --workspace --all-features` | ✅ exit 0（Rust 1.99.1 GNU host，MSYS2 gcc 16.1.0） | `logs/cargo-build.log` |
-| `cargo test --release --workspace --all-features` | ✅ **138 passed / 0 failed**（22 个测试目标 + doc-tests） | `logs/cargo-test.log` |
+| `cargo test --release --workspace --all-features` | ✅ **140 passed / 0 failed**（22 个测试目标 + doc-tests） | `logs/cargo-test.log` |
 | `make test` | ✅ 布局门 `PASSED (0 failure(s))` + 四方差分门 `RESULT: ALL MATCH` | `logs/make-test.log` |
 | `make shot` | ✅ `build/shot.png`，1280×900，47,260 B | `logs/make-shot.log` |
 | 中文渲染 | ✅ `文件` / `选项` / `下组` / `颜色` / `国王` / `挑战者` 均为实际字形，**无方框** | `build/shot.png` |
@@ -356,7 +359,7 @@ blackbox/
 
 - [ ] 原作与重构版**并排对拍**记录（本仓库不含 `WinLinez.EXE`，需在沙箱内提供）
 - [ ] 125% / 150% / 200% 三档 DPI 截图留档
-- [x] 黑盒采集回填（`blackbox/checklist.json` 当前 **42/54**；统计窗口已补，其余为悬停/双击/右键等重设计 UI 细节）
+- [x] 黑盒采集回填（`blackbox/checklist.json` 当前 **54/54**；悬停/双击/右键等按“原作行为 + 重设计”分别记录）
 
 复跑命令：
 

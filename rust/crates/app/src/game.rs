@@ -9,11 +9,31 @@ use rowline_core::input::{InputEvent, MouseButton, Point, Size};
 use rowline_core::layout::Layout;
 use rowline_core::render::RenderCmd;
 use rowline_core::state::{GameState, Phase};
+use std::time::{Duration, Instant};
+
 use rowline_core::{RuleModel, ScoreRecord, Settings};
 
 use rowline_theme::{DesignSystem, ThemeKind};
 
 use crate::commands::Command;
+
+/// How long one dissolve step lasts.
+///
+/// The original's clear routine calls `Sleep(50)` once per pass
+/// (`0x401C48`), and the frame burst shows two passes before the cells are
+/// empty (`C:\bb\shots\clear5`, 30 ms sampling).
+const CLEAR_STEP: Duration = Duration::from_millis(50);
+
+/// How long the winner's figure animates after a clear.
+const WIN_ANIM: Duration = Duration::from_millis(420);
+
+/// A clear that is still dissolving on screen.
+struct ClearAnimation {
+    /// When the move completed.
+    started: Instant,
+    /// `(cell, colour)` for every eliminated ball.
+    cells: Vec<(usize, u8)>,
+}
 
 /// The application state.
 pub struct Game {
@@ -45,6 +65,12 @@ pub struct Game {
     viewport_dirty: bool,
     /// The integer scale of the sprite sheet the renderer loaded.
     sheet_scale: u32,
+    /// The cell under the pointer, for the hover feedback (re-design).
+    hovered: Option<usize>,
+    /// The clear currently dissolving, if any.
+    clear_anim: Option<ClearAnimation>,
+    /// When the winning figure started its victory animation.
+    win_anim: Option<Instant>,
 }
 
 /// The modal overlays the game can show.
@@ -83,6 +109,9 @@ impl Game {
             name_input: rowline_core::scoreboard::default_player_name().to_string(),
             viewport_dirty: false,
             sheet_scale: 1,
+            hovered: None,
+            clear_anim: None,
+            win_anim: None,
         }
     }
 
@@ -114,8 +143,22 @@ impl Game {
         self.engine.score() as u32
     }
 
-    /// Advance the decorative effects.
+    /// Advance the decorative effects and finish expired animations.
     pub fn tick(&mut self, dt: f32) {
+        let now = Instant::now();
+        if self
+            .clear_anim
+            .as_ref()
+            .is_some_and(|a| now.saturating_duration_since(a.started) >= CLEAR_STEP * 2)
+        {
+            self.clear_anim = None;
+        }
+        if self
+            .win_anim
+            .is_some_and(|t| now.saturating_duration_since(t) >= WIN_ANIM)
+        {
+            self.win_anim = None;
+        }
         // With reduced motion the system simply never holds any particle, so
         // there is nothing to update.
         if self.design.motion.reduced {
@@ -364,11 +407,12 @@ impl Game {
                     if self.menu_click(*pos, layout.client_w) {
                         return;
                     }
-                    self.on_click(*pos, layout);
+                    self.click_at(*pos, layout);
                 }
             }
             InputEvent::MouseMoved { pos } => {
                 self.menu_hover(*pos);
+                self.update_hover(*pos, layout);
             }
             InputEvent::QuitRequested => self.quit = true,
             _ => {}
@@ -386,6 +430,9 @@ impl Game {
                 self.game_over = false;
                 self.game_over_ack = true;
                 self.overlay = Overlay::None;
+                self.hovered = None;
+                self.clear_anim = None;
+                self.win_anim = None;
             }
             Command::TOGGLE_NEXT_SET => {
                 self.settings.show_next = !self.settings.show_next;
@@ -551,7 +598,11 @@ impl Game {
         }
     }
 
-    fn on_click(&mut self, pos: Point, layout: Layout) {
+    /// Handle a click at a client position.
+    ///
+    /// Public so that the offline screenshot tool can drive the same
+    /// two-click interaction as the application.
+    pub fn click_at(&mut self, pos: Point, layout: Layout) {
         let Some((r, c)) = layout.hit_cell(pos.x as i32, pos.y as i32) else {
             return;
         };
@@ -561,25 +612,42 @@ impl Game {
                 if self.engine.board().colour_at(r as usize, c as usize) != 0 {
                     self.selected = Some(cell);
                     self.phase = Phase::Selected;
+                    self.path.clear();
                 }
             }
             Some(prev) => {
                 if prev == cell {
                     self.selected = None;
+                    self.path.clear();
                     self.phase = Phase::Ready;
                     return;
                 }
                 let (pr, pc) = rowline_core::coords(prev);
+                let moving_colour = self.engine.board().colour_at(pr, pc);
                 let res = self.engine.move_ball(pr as i32, pc as i32, r, c);
                 match res.status {
                     Some(rowline_core::MoveStatus::Moved) => {
                         self.selected = None;
-                        self.path = res.path.clone();
+                        self.path.clear();
                         self.phase = if res.group.is_empty() {
                             Phase::Ready
                         } else {
                             Phase::Animating
                         };
+                        if res.group.is_empty() {
+                            self.clear_anim = None;
+                        } else {
+                            let started = Instant::now();
+                            self.clear_anim = Some(ClearAnimation {
+                                started,
+                                cells: res
+                                    .group
+                                    .iter()
+                                    .map(|&cell| (cell, moving_colour))
+                                    .collect(),
+                            });
+                            self.win_anim = Some(started);
+                        }
                         if !self.engine.has_legal_move() {
                             self.game_over = true;
                             self.game_over_ack = false;
@@ -593,11 +661,36 @@ impl Game {
                     }
                     _ => {
                         self.selected = None;
+                        self.path.clear();
                         self.phase = Phase::Ready;
                     }
                 }
             }
         }
+    }
+
+    /// Update the cell under the pointer and the path preview.
+    ///
+    /// The original gives no board hover feedback (it is a two-click game);
+    /// the re-implementation adds a subtle ring and previews the shortest
+    /// 4-connected route once a ball is selected.
+    fn update_hover(&mut self, pos: Point, layout: Layout) {
+        self.hovered = layout
+            .hit_cell(pos.x as i32, pos.y as i32)
+            .map(|(r, c)| rowline_core::index(r as usize, c as usize));
+        self.path.clear();
+        let (Some(sel), Some(hover)) = (self.selected, self.hovered) else {
+            return;
+        };
+        if hover == sel || self.engine.board().cells()[hover] != 0 {
+            return;
+        }
+        self.path = rowline_core::rules::find_path(self.engine.board(), sel, hover);
+    }
+
+    /// The cell under the pointer.
+    pub fn hovered(&self) -> Option<usize> {
+        self.hovered
     }
 
     /// Acknowledge the end-of-game message.
@@ -664,6 +757,13 @@ impl Game {
 pub fn frame(game: &Game, layout: Layout) -> Vec<RenderCmd> {
     let mut cmds = rowline_core::view::build_frame(&game.snapshot(layout), &view_style(game));
 
+    // Board hover feedback and the clear dissolve (re-design / recovered
+    // timing, docs/11 section 5f).
+    cmds.extend(hover_commands(game, layout));
+    if let Some(anim) = &game.clear_anim {
+        cmds.extend(clear_animation_commands(game, layout, anim));
+    }
+
     // The HUD bar sits above the board, exactly as in the original.
     cmds.extend(hud_commands(game, layout));
 
@@ -708,6 +808,75 @@ pub fn frame(game: &Game, layout: Layout) -> Vec<RenderCmd> {
         Overlay::NameEntry => cmds.extend(name_entry_overlay(game, layout)),
         Overlay::About => cmds.extend(about_overlay(game, layout)),
         Overlay::None => {}
+    }
+    cmds
+}
+
+/// The hover ring under the pointer, when the board is interactive.
+fn hover_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
+    if game.overlay != Overlay::None
+        || game.help_open
+        || (game.game_over && !game.game_over_ack)
+        || !game.menu.is_closed()
+    {
+        return Vec::new();
+    }
+    let Some(cell) = game.hovered else {
+        return Vec::new();
+    };
+    let (r, c) = rowline_core::coords(cell);
+    let (dx, dy) = layout.cell_origin(r as i32, c as i32);
+    vec![RenderCmd::Outline {
+        rect: rowline_core::render::Rect::new(dx as f32 + 1.0, dy as f32 + 1.0, 34.0, 34.0),
+        color: game.design.palette.accent.into(),
+    }]
+}
+
+/// Draw the two-step dissolve recovered from `C:\bb\shots\clear5`.
+///
+/// The original's clear routine makes two passes with `Sleep(50)` between
+/// them: the first pass draws a sparse pattern over every eliminated ball,
+/// the second clears the cells and draws the empty plate.  The re-design
+/// approximates the pattern with a coarse 3×3 checker; the timing matches.
+fn clear_animation_commands(game: &Game, layout: Layout, anim: &ClearAnimation) -> Vec<RenderCmd> {
+    if game.design.motion.reduced {
+        return Vec::new();
+    }
+    let mut cmds = Vec::new();
+    let phase = (anim.started.elapsed().as_millis() / CLEAR_STEP.as_millis()) as usize;
+    if phase > 1 {
+        return cmds;
+    }
+    let p = &game.design.palette;
+    for &(cell, colour) in &anim.cells {
+        let (r, c) = rowline_core::coords(cell);
+        let (dx, dy) = layout.cell_origin(r as i32, c as i32);
+        let colour = p.balls.get(colour).into();
+        let keep = |i: usize, j: usize| {
+            if phase == 0 {
+                (i + j) % 2 == 0
+            } else {
+                // Three of the nine fragments survive the second pass.
+                matches!((i, j), (0, 0) | (1, 2) | (2, 1))
+            }
+        };
+        for j in 0..3 {
+            for i in 0..3 {
+                if !keep(i, j) {
+                    continue;
+                }
+                cmds.push(RenderCmd::RoundedRect {
+                    rect: rowline_core::render::Rect::new(
+                        dx as f32 + 3.0 + i as f32 * 10.0,
+                        dy as f32 + 3.0 + j as f32 * 10.0,
+                        10.0,
+                        10.0,
+                    ),
+                    radius: 2.0,
+                    color: colour,
+                });
+            }
+        }
     }
     cmds
 }
@@ -1230,6 +1399,7 @@ fn figure_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
         layout.left_figure_x,
         rowline_core::scoreboard::KING_NAME,
         Figure::King,
+        0.0,
     ));
     cmds.extend(one_figure(
         game,
@@ -1237,8 +1407,26 @@ fn figure_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
         layout.right_figure_x,
         rowline_core::scoreboard::CHALLENGER_NAME,
         Figure::Challenger,
+        win_lift(game),
     ));
     cmds
+}
+
+/// How far the winner's medallion is lifted during the victory animation.
+fn win_lift(game: &Game) -> f32 {
+    if game.design.motion.reduced {
+        return 0.0;
+    }
+    let Some(started) = game.win_anim else {
+        return 0.0;
+    };
+    let elapsed = started.elapsed().as_secs_f32();
+    let total = WIN_ANIM.as_secs_f32();
+    if elapsed >= total {
+        return 0.0;
+    }
+    let t = elapsed / total;
+    -(t * std::f32::consts::TAU).sin().abs() * 6.0
 }
 
 /// Which figure is drawn.
@@ -1272,6 +1460,7 @@ fn one_figure(
     slot_x: i32,
     label: &str,
     figure: Figure,
+    lift: f32,
 ) -> Vec<RenderCmd> {
     let ds = &game.design;
     let p = &ds.palette;
@@ -1284,7 +1473,7 @@ fn one_figure(
 
     // The medallion sits in the upper third of the board; the column runs
     // from it down to the bottom of the board.
-    let top = board_top + (rowline_core::layout::BOARD_FRAME_H as f32 - MEDALLION_D) * 0.36;
+    let top = board_top + (rowline_core::layout::BOARD_FRAME_H as f32 - MEDALLION_D) * 0.36 + lift;
     let feet = top + MEDALLION_D;
 
     // ---- the pedestal ---------------------------------------------------
@@ -1787,6 +1976,54 @@ mod tests {
             c,
             RenderCmd::RoundedRect { color, .. } if *color == rowline_core::render::Color::rgb(27, 30, 38)
         )));
+    }
+
+    #[test]
+    fn hovering_previews_the_path_from_the_selected_ball() {
+        let mut g = Game::new(7, RuleModel::default());
+        {
+            let b = g.engine_mut().board_mut();
+            b.cells_mut().fill(0);
+            b.set(0, 0, 1);
+        }
+        let layout = rowline_core::layout::Layout::compute(1280, 960);
+        g.selected = Some(rowline_core::index(0, 0));
+        let (dx, dy) = layout.cell_origin(2, 2);
+        g.update_hover(Point::new(dx as f32 + 18.0, dy as f32 + 18.0), layout);
+        assert_eq!(g.hovered(), Some(rowline_core::index(2, 2)));
+        assert_eq!(g.path.first(), Some(&rowline_core::index(0, 0)));
+        assert_eq!(g.path.last(), Some(&rowline_core::index(2, 2)));
+        // The hover ring and the path are both in the frame.
+        let cmds = frame(&g, layout);
+        let accent: rowline_core::render::Color = g.design.palette.accent.into();
+        assert!(
+            cmds.iter()
+                .any(|c| matches!(c, RenderCmd::Outline { color, .. } if *color == accent)),
+            "the hover ring is missing"
+        );
+    }
+
+    #[test]
+    fn a_clear_dissolves_in_two_steps() {
+        let mut g = Game::new(7, RuleModel::default());
+        g.clear_anim = Some(ClearAnimation {
+            started: Instant::now(),
+            cells: vec![(rowline_core::index(0, 0), 1)],
+        });
+        let layout = rowline_core::layout::Layout::compute(1280, 960);
+        let colour: rowline_core::render::Color = g.design.palette.balls.get(1).into();
+        let fragments = |cmds: &[RenderCmd]| {
+            cmds.iter()
+                .filter(|c| matches!(c, RenderCmd::RoundedRect { color, .. } if *color == colour))
+                .count()
+        };
+        // Phase 0: five of the nine fragments.
+        assert_eq!(fragments(&frame(&g, layout)), 5);
+        // Skip to phase 1: three fragments survive.
+        if let Some(a) = g.clear_anim.as_mut() {
+            a.started = Instant::now() - CLEAR_STEP;
+        }
+        assert_eq!(fragments(&frame(&g, layout)), 3);
     }
 
     #[test]
