@@ -46,6 +46,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build
         run: |
+          # `build/` is gitignored, so a fresh checkout does not have it.
+          mkdir -p build
           cc -std=c99 -O2 -Wall -Wextra -Wno-unused-parameter \
              -Ireference/c-impl -o build/rowline-replay \
              reference/c-impl/wl_model.c reference/c-impl/wl_replay.c
