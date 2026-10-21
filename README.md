@@ -22,7 +22,7 @@
 | **[docs/10_VISUAL_DESIGN.md](docs/10_VISUAL_DESIGN.md)** | **视觉设计规范**：深/浅色板、8pt 栅格、字阶、缓动与减少动效、资产规范、SDF 落地、无障碍 |
 | **[docs/11_SCREENSHOT_OBSERVATIONS.md](docs/11_SCREENSHOT_OBSERVATIONS.md)** | **原版实机截图观察**：从截图直接读到的事实（下一组 = 3 颗球、HUD 顶部横栏、黑底棋盘、游戏结束对话框）与实现修改清单 |
 | **[tools/blackbox/README.md](tools/blackbox/README.md)** | **黑盒采集操作手册**：Windows VM 上的完整执行流程 |
-| **[docs/temp/WINDOWS_DEV_CHECKLIST.md](docs/temp/WINDOWS_DEV_CHECKLIST.md)** | **Windows 开发机工作清单**：待确认的问题（规则/AI 对手/几何/输入/数值）、环境与坑、执行顺序、每项确认后的固定动作 |
+| **[docs/temp/WINDOWS_DEV_CHECKLIST.md](docs/temp/WINDOWS_DEV_CHECKLIST.md)** | **Windows 开发机工作清单**：待确认的问题（规则/AI 对手/几何/输入/数值）、环境与坑、执行顺序、每项确认后的固定动作；**工具链自检已完成 9/9**，黑盒采集待原作 |
 
 ## 工程结构
 
@@ -30,7 +30,7 @@
 02_winlinez/
 ├── REPORT.md                  逆向可行性报告
 ├── docs/                     12 份设计与规格文档
-│   └── temp/                 Windows 开发机工作清单（待执行）
+│   └── temp/                 Windows 开发机工作清单（工具链自检 9/9；黑盒采集待原作）
 ├── reference/c-impl/         C 对照实现（差分门的第三方，非产品代码）
 ├── rust/                     Rust 工程（9 个 crate）
 │   ├── crates/core/           纯逻辑：零依赖
@@ -78,7 +78,7 @@ Rust 侧：
 ```bash
 cd rust
 cargo build --release --workspace --all-features
-cargo test --release --workspace --all-features     # 126 项
+cargo test --release --workspace --all-features     # 127 项（含 doc-test）
 cargo clippy --workspace --all-features -- -D warnings
 ```
 
@@ -89,6 +89,12 @@ winprobe.exe --out bb\run1 --class WinLinezWindowClass
 python tools\blackbox\analyze.py probe bb\run1 --out bb\run1
 python tools\blackbox\analyze.py shot bb\shots\board.png --out bb\run1
 python tools\blackbox\checklist.py summary
+```
+
+Windows 工具链一键自检（9 项：cargo build/test、make test/shot、winprobe、黑盒管线、DPI 探针）：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\win\verify.ps1
 ```
 
 ## 关键结论速览
