@@ -219,6 +219,11 @@ if (-not $cargo -and $CargoHome) {
     $guess = Join-Path $CargoHome 'bin\cargo.exe'
     if (Test-Path $guess) { $cargo = Get-Item $guess }
 }
+if (-not $cargo -and $env:USERPROFILE -notmatch '[^\x00-\x7F]') {
+    # Ordinary rustup install with an ASCII profile and no PATH entry yet.
+    $guess = Join-Path $env:USERPROFILE '.cargo\bin\cargo.exe'
+    if (Test-Path $guess) { $cargo = Get-Item $guess }
+}
 if (-not $cargo) { throw "cargo not found. Install rustup, or pass -CargoHome." }
 $cargoExe = if ($cargo -is [System.Management.Automation.ApplicationInfo]) { $cargo.Source } else { $cargo.FullName }
 $env:PATH = "$(Split-Path -Parent $cargoExe);$env:PATH"

@@ -5,5 +5,5 @@ wl-dpi-probe: display environment
       -> logical client area 1560 x 1040  (board needs >= 880 x 892: ok)
 
   1 monitor(s)
-    Finished `release` profile [optimized] target(s) in 0.11s
+    Finished `release` profile [optimized] target(s) in 0.12s
      Running `target\release\rowline-dpi-probe.exe`
