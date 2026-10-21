@@ -1,5 +1,5 @@
 ﻿{
-    "generated_at":  "2026-10-21T15:32:03.3967559+08:00",
+    "generated_at":  "2026-10-21T18:52:48.5329068+08:00",
     "repo":  "D:\\source\\09_my\\Rowline",
     "ok":  true,
     "passed":  9,
@@ -19,56 +19,56 @@
                    {
                        "name":  "cargo build --release --workspace --all-features",
                        "ok":  true,
-                       "detail":  "exit=0      Finished `release` profile [optimized] target(s) in 0.13s",
-                       "log":  "blackbox\\windows_verify\\20261021-150638\\logs\\cargo-build.log"
+                       "detail":  "exit=0     Compiling rowline-app v0.1.0 (D:\\source\\09_my\\Rowline\\rust\\crates\\app) |    Compiling rowline-tools v0.1.0 (D:\\source\\09_my\\Rowline\\rust\\crates\\tools) |     Finished `release` profile [optimized] target(s) in 1m 08s",
+                       "log":  "blackbox\\windows_verify\\20261021-185131\\logs\\cargo-build.log"
                    },
                    {
                        "name":  "cargo test --release --workspace --all-features",
                        "ok":  true,
                        "detail":  "exit=0     Doc-tests rowline_render |    Doc-tests rowline_storage |    Doc-tests rowline_theme",
-                       "log":  "blackbox\\windows_verify\\20261021-150638\\logs\\cargo-test.log"
+                       "log":  "blackbox\\windows_verify\\20261021-185131\\logs\\cargo-test.log"
                    },
                    {
                        "name":  "make test (layout gate + four-way differential gate)",
                        "ok":  true,
                        "detail":  "exit=0    OK   rust-implementation  matches python-reference |   OK   golden               matches python-reference | RESULT: ALL MATCH",
-                       "log":  "blackbox\\windows_verify\\20261021-150638\\logs\\make-test.log"
+                       "log":  "blackbox\\windows_verify\\20261021-185131\\logs\\make-test.log"
                    },
                    {
                        "name":  "make shot (offline render)",
                        "ok":  true,
                        "detail":  "exit=0  rust/target/release/rowline-shot.exe --out build/shot.png --width 1280 --height 900 | wrote build/shot.png (1280x900) | \"wrote build/shot.png\"",
-                       "log":  "blackbox\\windows_verify\\20261021-150638\\logs\\make-shot.log"
+                       "log":  "blackbox\\windows_verify\\20261021-185131\\logs\\make-shot.log"
                    },
                    {
                        "name":  "build/shot.png is a non-trivial 1280x900 PNG",
                        "ok":  true,
-                       "detail":  "1280x900, 47260 bytes",
+                       "detail":  "1280x900, 47266 bytes",
                        "log":  null
                    },
                    {
                        "name":  "winprobe.c compiles",
                        "ok":  true,
                        "detail":  "exit=0  -\u003e D:\\source\\09_my\\Rowline\\build\\winprobe.exe",
-                       "log":  "blackbox\\windows_verify\\20261021-150638\\logs\\winprobe.log"
+                       "log":  "blackbox\\windows_verify\\20261021-185131\\logs\\winprobe.log"
                    },
                    {
-                       "name":  "black-box simulator matches the centred layout",
+                       "name":  "black-box simulator matches the confirmed layout",
                        "ok":  true,
-                       "detail":  "centred delta=dx +0, dy +0; colours=7",
-                       "log":  "blackbox\\windows_verify\\20261021-150638\\logs\\analyze-shot.log"
+                       "detail":  "layout delta=dx +0, dy +0; colours=7",
+                       "log":  "blackbox\\windows_verify\\20261021-185131\\logs\\analyze-shot.log"
                    },
                    {
                        "name":  "checklist.py loads and is consistent",
                        "ok":  true,
                        "detail":  "summary exit=0, check exit=0",
-                       "log":  "blackbox\\windows_verify\\20261021-150638\\logs\\checklist-summary.log"
+                       "log":  "blackbox\\windows_verify\\20261021-185131\\logs\\checklist-summary.log"
                    },
                    {
                        "name":  "rowline-dpi-probe reads the display environment",
                        "ok":  true,
                        "detail":  "\\\\.\\DISPLAY1 3120x2080px scale 2.00",
-                       "log":  "blackbox\\windows_verify\\20261021-150638\\logs\\dpi-probe.log"
+                       "log":  "blackbox\\windows_verify\\20261021-185131\\logs\\dpi-probe.log"
                    }
                ]
 }

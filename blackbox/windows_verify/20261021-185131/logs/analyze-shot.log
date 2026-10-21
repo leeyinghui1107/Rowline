@@ -1,7 +1,6 @@
-=== screenshot conformance: mock_centred.png ===
-  measured board origin : (348, 268)
-  hypothesis 'centred'  : (348, 268)   delta +0 / +0
-  hypothesis 'legacy'   : (458, 501)   delta -110 / -233
+=== screenshot conformance: mock_1024x768.png ===
+  measured board origin : (348, 242)
+  predicted origin      : (348, 242)   delta +0 / +0
 
   measured board map (colour name per slot):
     BLUE     GREEN    RED      RED      RED      GREEN    GREEN    RED      MAROON  
@@ -24,10 +23,9 @@
 
   ITEM                               EXPECTED               MEASURED               RESULT
   ----------------------------------------------------------------------------------------------
-  board origin X (centred hypothesis) 348                    348                    OK
-  board origin Y (centred hypothesis) 268                    268                    OK
-  the centred hypothesis fits        |delta| <= 4           dx +0, dy +0           OK
-  the legacy hypothesis fits         |delta| <= 4           dx -110, dy -233       DIFF (docs/11 section 5d: the binary constant is still unidentified)
+  board origin X                     348                    348                    OK
+  board origin Y                     242                    242                    OK
+  the layout formula fits            |delta| <= 4           dx +0, dy +0           OK
   cell size px                       36                     36                     OK
   grid side                          9                      9                      OK
   board frame width                  327                    327                    OK
@@ -36,5 +34,5 @@
   distinct colours observed          7                      7                      OK
   colour names all known             known names            BLUE,CYAN,GREEN,MAGENT OK
   ----------------------------------------------------------------------------------------------
-  11 checks, 10 match, 1 differ
-  -> D:\source\09_my\Rowline\blackbox\windows_verify\20261021-150638\shot
+  10 checks, 10 match, 0 differ
+  -> D:\source\09_my\Rowline\blackbox\windows_verify\20261021-185131\shot

@@ -20,8 +20,8 @@ The palette matches the colours recovered from the original atlas.
 import math, os, struct, zlib
 
 # The atlas geometry at scale 1.  Every coordinate is multiplied by `scale`
-# so that an @2x / @3x sheet is a genuine high-resolution rendering rather
-# than an upscaled copy.
+# so that an @2x / @3x / @4x sheet is a genuine high-resolution rendering
+# rather than an upscaled copy.
 W1, H1 = 576, 586
 CELL1 = 36
 INSET1 = 2
@@ -215,10 +215,15 @@ if __name__ == "__main__":
     root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     out = os.path.join(root, "assets", "sheet")
     os.makedirs(out, exist_ok=True)
-    for scale in (1, 2, 3):
+    for scale in (1, 2, 3, 4):
         base = "rowline_sheet" if scale == 1 else "rowline_sheet@%dx" % scale
-        build_sheet(scale).png(os.path.join(out, base + ".png"))
-        build_sheet(scale).bmp(os.path.join(out, base + ".bmp"))
+        sheet = build_sheet(scale)
+        sheet.png(os.path.join(out, base + ".png"))
+        # The BMP copies are only needed by the C reference and for easy
+        # inspection; keep the @4x variant PNG-only so the repository does
+        # not grow by another 16 MB.
+        if scale <= 3:
+            sheet.bmp(os.path.join(out, base + ".bmp"))
         if scale == 1:
             build_guide(scale).png(os.path.join(out, "rowline_sheet_guide.png"))
     print("\nindex map (renderer formula: srcX = value*36 + set*288, srcY = 225)")

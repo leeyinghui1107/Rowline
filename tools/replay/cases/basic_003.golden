@@ -1,84 +1,53 @@
-state 0 .............1..........3............................4..............3.....5...... 0
-path 1 7,5 6,4 5,3 6,2 7,1 8,0
-state 1 .............1..........3............................4..............3...3.5...... 0
-note 2 illegal move
-note 3 illegal move
-note 4 illegal move
-note 5 illegal move
-note 6 illegal move
-note 7 illegal move
-note 8 illegal move
-note 9 illegal move
-note 10 illegal move
-note 11 illegal move
-note 12 illegal move
-note 13 illegal move
-note 14 illegal move
-note 15 illegal move
-note 16 illegal move
-note 17 illegal move
-note 18 illegal move
-note 19 illegal move
-note 20 illegal move
-note 21 illegal move
-note 22 illegal move
-note 23 illegal move
-note 24 illegal move
-note 25 illegal move
-note 26 illegal move
-note 27 illegal move
-note 28 illegal move
-note 29 illegal move
-note 30 illegal move
-note 31 illegal move
-note 32 illegal move
-note 33 illegal move
-note 34 illegal move
-note 35 illegal move
-note 36 illegal move
-path 37 7,5 6,4
-state 37 .............1..........3............................4....3.........3...3.5...... 0
-note 38 illegal move
-note 39 illegal move
-path 40 8,2 8,3
-state 40 .............1..........3............................4....3.........3...3.55..... 0
-note 41 illegal move
-note 42 illegal move
-note 43 illegal move
-note 44 illegal move
-note 45 illegal move
-note 46 illegal move
-note 47 illegal move
-note 48 illegal move
-note 49 illegal move
-note 50 illegal move
-note 51 illegal move
-note 52 illegal move
-note 53 illegal move
-note 54 illegal move
-note 55 illegal move
-note 56 illegal move
-note 57 illegal move
-note 58 illegal move
-note 59 illegal move
-note 60 illegal move
-note 61 illegal move
-note 62 illegal move
-note 63 illegal move
-note 64 illegal move
-note 65 illegal move
-note 66 illegal move
-note 67 illegal move
-note 68 illegal move
-note 69 illegal move
-note 70 illegal move
-note 71 illegal move
-note 72 illegal move
-note 73 illegal move
-note 74 illegal move
-note 75 illegal move
-note 76 illegal move
-note 77 illegal move
-note 78 illegal move
-note 79 illegal move
-note 80 illegal move
+state 0 .1.............1.......6.2..............................................4........ 0
+path 1 2,7 1,7 0,7 0,6 0,5
+state 1 .1...2..3......1.......6...................6............................45....... 0
+path 2 8,0 7,0 6,0 5,0 5,1
+state 2 .1...2..3......1.......6...............5...6..4..............4.....5.....5....... 0
+path 3 5,1 4,1 3,1 2,1 2,2
+state 3 21...2..3......1....4..6...............5.6.6.................4...3.5.....5....... 0
+path 4 4,5 3,5 3,4 2,4 2,3
+state 4 21...2..3.....41....46.6...............5...6....3............4.4.3.5.....5....... 0
+path 5 6,7 5,7 5,6 4,6 3,6 3,7
+state 5 21.1.2.13.....41..2.46.6..........4....5...6....3..............4.3.5.....5....... 0
+path 6 7,2 6,2 5,2 4,2 4,1
+state 6 21.1.2.13.....41.32.46.6..........4..3.5.5.6....3.....4........4...5.....5....... 0
+path 7 1,5 1,4 2,4 3,4 4,4 5,4 6,4 6,3 7,3 7,2 7,1
+state 7 21.1.2.13......1.32.46.6.7........4..3.5.5.6....3.....4........44..5.....5...45.. 0
+path 8 6,0 6,1
+state 8 21.1.2.13.3....1.32246.6.7........4..3.5.5.6....3......4...1...44..5.....5...45.. 0
+path 9 1,8 2,8 3,8 4,8 5,8 5,7 5,6 4,6 3,6 3,5 3,4 2,4 1,4 1,3
+state 9 21.1.2.13.3.34.1..2246.6.7........4..3.5.5.6....3......4...1.5.443.5.....5...45.. 0
+path 10 2,1 3,1 3,0
+state 10 21.1.2.13.3.34.1..2.46.6.7.2......4..3.5.5.6....3..6...4...1.5.443.5.6..55...45.. 0
+path 11 1,6 2,6 3,6 3,5 3,4 4,4
+state 11 21.1.2.13.3.34....2.46.6.7.2......4..34515.6....3..6...4.6.1.5.443.5.6..55..245.. 0
+path 12 8,6 8,7 7,7 7,8 6,8 5,8 4,8 3,8 2,8
+state 12 21.1.2.13.3.34....2.46.6.752.3....4..34515.6....3..6...4.6.1.5.44315.6..55..245.. 0
+path 13 8,6 8,7 7,7
+state 13 21.1.2.13.3.34....2.46.6.752.3....4..34515.6....3..6...4.6.1.5.44315.65.55.5246.3 0
+path 14 4,1 5,1 5,2
+state 14 21.1.2.13.3.34....2.46.6.752.376..4...4515.64..33..6...4.6.1.5.44315.65.55.5246.3 0
+path 15 4,7 5,7 5,8
+state 15 2141.2.13.3.34....2.46.6.752.376..4...4515..4..33..6.654.6.1.5.44315665.55.5246.3 0
+path 16 8,8 7,8
+state 16 2141.2.13.3.342...2.46.63752.376..4...4515..4..33..6.654.6.1.5144315665355.5246.. 0
+path 17 0,0 1,0
+state 17 .141.2.1323.342..42.46.63752.376..43..4515..4..33..6.654.6.1.5144315665355.52461. 0
+path 18 6,1 5,1
+state 18 .141.2.1323.342..42.46163752.376..434.4515..4.433..6.65..671.5144315665355.52461. 0
+path 19 0,2 1,2
+state 19 .1.1.2.13234342..42146163752.376..43444515..4.433..6.65..671.5144315665355652461. 0
+path 20 4,1 3,1
+state 20 .1.1.2.13234342.5421461637524376..434.4515..434337.6.65..671.5144315665355652461. 0
+path 21 0,5 0,6
+state 21 .1.1..213234342.5421461637524376..434.4515..43433726.651.671.51443156653556524613 0
+path 22 1,2 0,2
+state 22 6141.7213235342.5421461637524376..434.4515..43433726.651.671.51443156653556524613 0
+path 23 5,6 4,6 4,7
+state 23 6141.721323534215421461637524376..43444515.64343372..651.671751443156653556524613 0
+path 24 3,7 3,6 4,6
+state 24 6141.721323534215421461637524376..634445154643433723.6513671751443156653556524613 0
+path 25 1,4 0,4
+state 25 614147213235342154214616375243764.63444515464343372346513671751443156653556524613 0
+path 26 3,5 3,6
+state 26 614147213235342154214616375243763463444515464343372346513671751443156653556524613 0

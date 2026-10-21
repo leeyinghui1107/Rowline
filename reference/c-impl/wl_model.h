@@ -45,29 +45,36 @@ int  wl_board_full(const wl_board *b);
 
 /* ------------------------------------------------------------------ rules */
 typedef struct {
-    int threshold;             /* cells needed to clear                */
-    int source_keeps_colour;   /* moved ball's old cell stays coloured */
-    int max_turns;             /* -1 = unlimited                       */
-    int refill;                /* balls added after an elimination     */
+    int threshold;             /* cells needed in a straight run       */
+    int spawn_per_move;        /* balls placed after a non-clearing turn */
     int initial_balls;         /* balls placed on a fresh board (the original uses 5) */
-    int points_per_ball;       /* score per eliminated ball            */
-    int min_score_delta;       /* minimum delta for a line to count    */
-    int allow_revisit_source;  /* path may pass through the source cell */
+    int source_keeps_colour;   /* experiments only; the original clears the source */
 } wl_rule_model;
 
 void wl_rule_model_default(wl_rule_model *m);
 
-/* Largest connected same-colour component containing `start`, or 0. */
-int wl_connected_group(const wl_board *b, int start, int colour, int threshold,
-                       int *out_cells);
+/*
+ * Every straight run of `colour` through `start` that is at least
+ * `threshold` cells long.  Writes the union of the marked cells (sorted
+ * ascending) to `out_cells` and returns the sum of the qualifying run
+ * lengths, or 0 when no run qualifies.
+ *
+ * The original scans four axes (vertical, main diagonal, horizontal,
+ * anti-diagonal) in both directions; a connected blob that is not a
+ * straight line does not clear.
+ */
+int wl_find_lines(const wl_board *b, int start, int colour, int threshold,
+                  int *out_cells, int *out_count);
+
+/* Score for a clear whose qualifying run lengths sum to `total`. */
+int wl_score_for_run(int total);
 
 /*
- * Find a path from `src` to `dst` over empty cells (8-connected).
- * Returns the number of cells written to `out_path` (excluding src, including
- * dst), or 0 if no path exists.  Mirrors the reference implementation's
- * breadth-first ordering exactly.
+ * Find a shortest 4-connected path from `src` to `dst` through empty cells.
+ * Returns the full path length (including source and destination), or 0 if
+ * no path exists.  The path is written to `out_path` up to `out_cap` cells.
  */
-int wl_find_path(const wl_board *b, int src, int dst, const wl_rule_model *m,
+int wl_find_path(const wl_board *b, int src, int dst,
                  int *out_path, int out_cap);
 
 /* ------------------------------------------------------------------ engine */

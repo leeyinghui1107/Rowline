@@ -97,23 +97,21 @@ pub struct Engine {
 - 无 `unsafe`（整个 crate 零 unsafe，编译期即可保证）
 - `Engine` 天然可 `Send`（全 `Copy`/普通字段），未来多线程渲染无需额外同步
 
-### 3.2 `RuleModel`：把不确定性变成数据
+### 3.2 `RuleModel`：已定标的规则参数
 
 ```rust
 pub struct RuleModel {
-    pub threshold: usize,            // BB-G03   已确认 = 5
-    pub source_keeps_colour: bool,   // BB-G03
-    pub max_turns: Option<usize>,    // BB-G04
-    pub refill: usize,               // BB-G02 / BB-G06
-    pub initial_balls: usize,         // BB-G01 -> 5 (screenshot)
-    pub points_per_ball: i64,        // BB-G11
-    pub min_score_delta: i64,        // BB-G11
-    pub allow_revisit_source: bool,  // BB-G05
+    pub threshold: usize,           // 5，0x401AF8 硬编码
+    pub spawn_per_move: usize,      // 3，仅未消线的回合
+    pub initial_balls: usize,       // 5，0x402801 新局
+    pub source_keeps_colour: bool,  // false，原作的源格清空
 }
 ```
 
-**设计要点**：每个字段在文档注释里标注**对应的黑盒采集项编号**。
-黑盒阶段只需改这三个结构体（Python / C / Rust 各一），差分门立刻验证三方是否仍然一致。
+**设计要点**：清除形状（过落点的整条直线）、4 邻域移动、非线性分值
+（5→10 / 6→12 / 7→18 / 8→28 / 9→42）和“满盘才结束”都是固定语义，
+不再是可调开关。三个实现（Python / C / Rust）保持逐字节一致，
+差分门验证四方仍然相同。
 
 ### 3.3 确定性保证
 
@@ -198,8 +196,9 @@ pub trait Clock { fn now_millis(&self) -> u64; }
 |---|---|---|---|
 | 256 | F4 | 新开一局 | `Engine::new_game()` |
 | 512 | F3 | 切换"显示下一组" | `settings.show_next` |
-| 513 | F5 | 切换统计显示 | `settings.show_statistics` |
+| 513 | F5 | 切换统计窗口（8 行：数量 / 百分比 / `消除-N`） | `settings.show_statistics` + `Engine::colour_counts()` / `cleared_counts()` |
 | 514 | F6 | 切换形状精灵集 | `Engine::set_use_figures()` |
+| 515 | Ctrl+R | 切换固定分辨率显示策略（重设计扩展） | `Game::toggle_retro_mode()` → `take_viewport_dirty()` |
 | 768 | F1 | 打开帮助 | `platform::help::open()` |
 | 769 | — | 关于框 | `platform::dialog::about()` |
 | 258 | Alt+F9 | 退出 | `Window::request_quit()` |
@@ -309,11 +308,11 @@ make test        # 布局门 + 三方差分门（含 Rust）
 | 里程碑 | Rust 侧动作 | 状态 |
 |---|---|---|
 | **M1 骨架** | `core` 全量 + `layout` 单测 + `rowline-replay` | ✅ |
-| **M2 玩法** | 语义定标后更新 `RuleModel`；补属性测试 | 🟡 等黑盒 |
-| **M3 计分/结束** | `engine` 增加 level/结束态 | ⬜ |
-| **M4 持久化** | `platform::Storage` + JSON/INI 后端 + 原作导入器（`rowline-import`） | ⬜ |
-| **M5 表现** | `platform::Renderer` + SDL2/winit 后端 + 自制美术 | ⬜ |
-| **M6 交付** | wasm 后端 + i18n + 帮助手册 + CI 多平台 | ⬜ |
+| **M2 玩法** | 语义定标后更新 `RuleModel`；补属性测试 | ✅ 已定标 |
+| **M3 计分/结束** | `engine` 增加分值表与满盘结束态 | ✅ |
+| **M4 持久化** | `platform::Storage` + JSON/INI 后端 + 原作导入器（`rowline-import`） | ✅ |
+| **M5 表现** | `platform::Renderer` + winit/wgpu 后端 + 自制美术 | ✅ |
+| **M6 交付** | i18n 未做（与原作一致固定简体中文）+ 帮助手册 + CI 多平台 | ✅ |
 
 **切换条件**：当 Rust 实现通过三方差分门 **且** 覆盖 `BB-M01..G15` 全部规则用例，
 即可弃用 C 原型，把它降级为"对照实现"留在 `reference/`。

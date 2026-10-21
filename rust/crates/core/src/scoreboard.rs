@@ -104,11 +104,14 @@ impl Scoreboard {
         self.rows.first().map(|r| r.score).unwrap_or(0)
     }
 
-    /// `true` when the given name and score would make the table.
+    /// `true` when the score would make the table.
     ///
-    /// A score has to beat the current best; the name must not be empty.
-    pub fn qualifies(&self, name: &str, score: u32) -> bool {
-        !name.trim().is_empty() && score > 0 && score >= self.best()
+    /// The original (`0x402CB1`) scans the 16 rows and inserts when the score
+    /// is strictly greater than the row it stops at.  Empty rows count as
+    /// zero, so any positive score qualifies while the table is not full; once
+    /// it is full, the score has to beat the last row.
+    pub fn qualifies(&self, score: u32) -> bool {
+        score > 0 && score > self.rows.last().map(|r| r.score).unwrap_or(0)
     }
 }
 

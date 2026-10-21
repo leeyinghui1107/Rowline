@@ -2,9 +2,11 @@
  "version": 1,
  "items": {
   "BB-M01": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/run1/menu.json"
+   ],
+   "notes": "runtime menu tree matches RT_MENU (276 bytes)",
    "owner": "",
    "group": "菜单",
    "title": "启动后主菜单完整项与层级",
@@ -12,9 +14,11 @@
    "criteria": "逐项截图；记录 Accelerator 提示文本"
   },
   "BB-M02": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/run1/menu.json"
+   ],
+   "notes": "checked state recovered from the runtime menu",
    "owner": "",
    "group": "菜单",
    "title": "每个菜单项的 Enabled/Checked 初始态",
@@ -42,9 +46,11 @@
    "criteria": "展开延迟 ms"
   },
   "BB-M05": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/run1/menu.json"
+   ],
+   "notes": "accelerator table matches the WM_COMMAND ids",
    "owner": "",
    "group": "菜单",
    "title": "菜单与快捷键的等价性",
@@ -52,9 +58,11 @@
    "criteria": "行为必须一致"
   },
   "BB-M06": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "menu commands remain available; game-over message is modal",
    "owner": "",
    "group": "菜单",
    "title": "游戏中 vs 结束后菜单可用性差异",
@@ -62,9 +70,11 @@
    "criteria": "记录被禁用的项"
   },
   "BB-K01": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/run1/menu.json"
+   ],
+   "notes": "accelerator table recovered and cross-checked",
    "owner": "",
    "group": "按键",
    "title": "全部快捷键及其作用",
@@ -82,9 +92,11 @@
    "criteria": "记录差异"
   },
   "BB-K03": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/shots"
+   ],
+   "notes": "live clicks: first selects, second moves",
    "owner": "",
    "group": "按键",
    "title": "鼠标单击棋盘格的效果",
@@ -142,9 +154,11 @@
    "criteria": "状态复位规则"
   },
   "BB-K09": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "docs/11_SCREENSHOT_OBSERVATIONS.md"
+   ],
+   "notes": "coordinates recomputed from WM_SIZE on every resize",
    "owner": "",
    "group": "按键",
    "title": "窗口缩放中的输入",
@@ -152,9 +166,11 @@
    "criteria": "坐标映射是否随尺寸变化"
   },
   "BB-K10": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/shots"
+   ],
+   "notes": "no keyboard board control observed",
    "owner": "",
    "group": "按键",
    "title": "键盘方向键 / 回车的棋盘交互",
@@ -162,9 +178,11 @@
    "criteria": "是否存在键盘操控"
   },
   "BB-G01": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "0x402801: roll 3 preview colours, clear board, spawn 5; docs/11 5c",
    "owner": "",
    "group": "规则",
    "title": "新局初始棋盘内容",
@@ -172,9 +190,11 @@
    "criteria": "初始球数、颜色分布、是否随机"
   },
   "BB-G02": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "quiet turn 0x401CD4 spawns 3; clear branch 0x401BD4 spawns none",
    "owner": "",
    "group": "规则",
    "title": "一次有效操作后棋盘如何变化",
@@ -182,9 +202,11 @@
    "criteria": "新球从何处生成、落点规则"
   },
   "BB-G03": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "threshold hard-coded 5 at 0x401AF8; find_lines scans 4 axes through the landing cell",
    "owner": "",
    "group": "规则",
    "title": "消除触发条件",
@@ -192,9 +214,11 @@
    "criteria": "最小消除数量"
   },
   "BB-G04": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "movement uses 4-neighbour steps (0x4016xx); clears run along straight axes",
    "owner": "",
    "group": "规则",
    "title": "连线是否允许拐弯",
@@ -202,9 +226,11 @@
    "criteria": "拐弯次数上限与折线规则"
   },
   "BB-G05": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "path walks empty cells only; source cell is emptied",
    "owner": "",
    "group": "规则",
    "title": "连线是否允许穿越已有球",
@@ -212,9 +238,11 @@
    "criteria": "阻挡规则"
   },
   "BB-G06": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "0x401BD4 clears without spawning; only quiet turns spawn",
    "owner": "",
    "group": "规则",
    "title": "消除后棋盘如何重排",
@@ -222,9 +250,11 @@
    "criteria": "是否下落、是否补充、何时补充"
   },
   "BB-G07": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "0x401CA1 counts empty cells; zero -> 游戏结束! MessageBox",
    "owner": "",
    "group": "规则",
    "title": "棋盘满时的行为",
@@ -232,9 +262,11 @@
    "criteria": "结束条件与提示"
   },
   "BB-G08": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "quiet turns spawn 3 balls; cleared turns do not",
    "owner": "",
    "group": "规则",
    "title": "无可消除连线时的棋盘演化",
@@ -262,9 +294,11 @@
    "criteria": "动画时长、帧数、是否有停顿"
   },
   "BB-G11": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "0x401E1D: 5->10, 6->12, 7->18, 8->28, 9->42",
    "owner": "",
    "group": "规则",
    "title": "计分规则",
@@ -272,9 +306,11 @@
    "criteria": "消除个数/长度 → 分值映射"
   },
   "BB-G12": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "no cap in the score function; max delta per move is 42",
    "owner": "",
    "group": "规则",
    "title": "分数上限与封顶",
@@ -282,9 +318,11 @@
    "criteria": "是否有单次/单局封顶"
   },
   "BB-G13": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "no level/level table in the binary; score only",
    "owner": "",
    "group": "规则",
    "title": "等级/关卡推进",
@@ -292,9 +330,11 @@
    "criteria": "触发条件与变化"
   },
   "BB-G14": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "0x401CA1 + 0x4032E2: full board -> 游戏结束! then insert score",
    "owner": "",
    "group": "规则",
    "title": "游戏结束条件与结束画面",
@@ -302,9 +342,11 @@
    "criteria": "结束判定、弹窗文案、按钮"
   },
   "BB-G15": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "0x402CB1 runs at game over; DialogBox 1002 name then 1001 table",
    "owner": "",
    "group": "规则",
    "title": "新纪录判定",
@@ -312,9 +354,11 @@
    "criteria": "提示弹窗与按钮行为"
   },
   "BB-N01": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "9x9 board confirmed",
    "owner": "",
    "group": "数值",
    "title": "棋盘维度",
@@ -322,9 +366,11 @@
    "criteria": "9x9"
   },
   "BB-N02": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/shots"
+   ],
+   "notes": "7 atlas colours sampled; reconstruction uses its own palette",
    "owner": "",
    "group": "数值",
    "title": "每格颜色集合",
@@ -332,9 +378,11 @@
    "criteria": "7 色 + RGB"
   },
   "BB-N03": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "new game spawns exactly 5 balls (0x402801)",
    "owner": "",
    "group": "数值",
    "title": "初始球数",
@@ -342,9 +390,11 @@
    "criteria": "是否固定"
   },
   "BB-N04": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "3 balls per quiet turn (0x401CD4 x3)",
    "owner": "",
    "group": "数值",
    "title": "新球补充数量",
@@ -352,9 +402,11 @@
    "criteria": "固定值"
   },
   "BB-N05": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "threshold 5 (0x401AF8)",
    "owner": "",
    "group": "数值",
    "title": "消除阈值",
@@ -362,9 +414,11 @@
    "criteria": "固定值"
   },
   "BB-N06": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "full score table recovered at 0x401E1D",
    "owner": "",
    "group": "数值",
    "title": "分值表",
@@ -372,9 +426,11 @@
    "criteria": "完整对照表"
   },
   "BB-N07": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "no level progression exists",
    "owner": "",
    "group": "数值",
    "title": "等级表",
@@ -382,9 +438,11 @@
    "criteria": "完整对照表"
   },
   "BB-N08": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/run1/config.json"
+   ],
+   "notes": "16 x 32-byte records (Table 512 B)",
    "owner": "",
    "group": "数值",
    "title": "高分榜条目数",
@@ -392,9 +450,11 @@
    "criteria": "16"
   },
   "BB-N09": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "0x402CB1 shifts rows and inserts at the first lower score; equal scores keep order",
    "owner": "",
    "group": "数值",
    "title": "高分榜排序规则",
@@ -402,9 +462,11 @@
    "criteria": "同分次序"
   },
   "BB-N10": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/winlinez_disasm.txt"
+   ],
+   "notes": "default 挑战者, 28-byte name field",
    "owner": "",
    "group": "数值",
    "title": "玩家名输入规则",
@@ -412,9 +474,11 @@
    "criteria": "最大长度、字符集、默认名"
   },
   "BB-N11": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/shots"
+   ],
+   "notes": "spawn rate constant across long idle/play captures",
    "owner": "",
    "group": "数值",
    "title": "时间/难度参数",
@@ -422,9 +486,11 @@
    "criteria": "补球频率是否随时间变化"
   },
   "BB-U01": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:/bb/run1/config.json"
+   ],
+   "notes": "default client 604x371; all 8 INI keys present",
    "owner": "",
    "group": "UI",
    "title": "主窗口初始尺寸与位置",
@@ -432,9 +498,11 @@
    "criteria": "默认值"
   },
   "BB-U02": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "docs/11_SCREENSHOT_OBSERVATIONS.md"
+   ],
+   "notes": "frame 327x328, inset 2, cell 36 (docs/11 5d)",
    "owner": "",
    "group": "UI",
    "title": "客户区各区域几何",
@@ -442,9 +510,11 @@
    "criteria": "棋盘区、侧栏、边框的像素矩形"
   },
   "BB-U03": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "docs/11_SCREENSHOT_OBSERVATIONS.md"
+   ],
+   "notes": "x=(W-328)/2, y=(H-376)/2+46 confirmed at 604x371",
    "owner": "",
    "group": "UI",
    "title": "布局随窗口尺寸的变化",
@@ -452,9 +522,11 @@
    "criteria": "锚定规则（居中/左对齐）"
   },
   "BB-U04": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "docs/11_SCREENSHOT_OBSERVATIONS.md"
+   ],
+   "notes": "board origin confirmed; 0x40B078 is the preview group X",
    "owner": "",
    "group": "UI",
    "title": "棋盘格在客户区的位置",
@@ -462,9 +534,11 @@
    "criteria": "棋盘原点相对客户区的偏移"
   },
   "BB-U05": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "docs/11_SCREENSHOT_OBSERVATIONS.md"
+   ],
+   "notes": "HUD top bar: scores, 下组, 3 previews, 颜色 (docs/11 2)",
    "owner": "",
    "group": "UI",
    "title": "侧栏内容",
@@ -472,9 +546,11 @@
    "criteria": "分数、下一颗预览、统计条、按钮"
   },
   "BB-U06": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "docs/11_SCREENSHOT_OBSERVATIONS.md"
+   ],
+   "notes": "next group is 3 balls (docs/11 2.1)",
    "owner": "",
    "group": "UI",
    "title": "下一颗预览球",
@@ -482,9 +558,11 @@
    "criteria": "预览位置与数量"
   },
   "BB-U07": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "C:\\bb\\shots\\stats_client.png"
+   ],
+   "notes": "8 rows (empty + 7 colours); count (percent%), ball rows append ,消除-N; percent=count*100/81; N resets each game (0x401C7A/0x40282F)",
    "owner": "",
    "group": "UI",
    "title": "统计条 / 量表控件",
@@ -492,9 +570,11 @@
    "criteria": "含义与刷新时机"
   },
   "BB-U08": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "docs/11_SCREENSHOT_OBSERVATIONS.md"
+   ],
+   "notes": "scoreboard/name/about dialogs reproduced from screenshots",
    "owner": "",
    "group": "UI",
    "title": "对话框（统计/关于/新纪录）",
@@ -502,9 +582,11 @@
    "criteria": "控件布局、默认按钮、文本"
   },
   "BB-U09": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "docs/11_SCREENSHOT_OBSERVATIONS.md"
+   ],
+   "notes": "no tooltips observed on the dialogs",
    "owner": "",
    "group": "UI",
    "title": "工具提示",
@@ -522,9 +604,11 @@
    "criteria": "任务栏/标题栏图标"
   },
   "BB-U11": {
-   "status": "todo",
-   "evidence": [],
-   "notes": "",
+   "status": "done",
+   "evidence": [
+    "docs/11_SCREENSHOT_OBSERVATIONS.md"
+   ],
+   "notes": "16 rows, N. name + score (docs/11 5b)",
    "owner": "",
    "group": "UI",
    "title": "高分榜文字排版",

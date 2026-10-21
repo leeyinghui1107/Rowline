@@ -187,6 +187,14 @@ pub struct Palette {
     pub background: Rgba,
     /// The board surface.
     pub surface: Rgba,
+    /// The strip behind the board (the original paints it black).
+    pub board_backdrop: Rgba,
+    /// The fill of an empty board cell.
+    ///
+    /// A theme may give the board its own tint: the dark theme keeps the
+    /// original's light-grey plates on a dark strip, while the light theme
+    /// uses a warm paper backdrop with cream plates.
+    pub board_cell: Rgba,
     /// A recessed surface (the side panel).
     pub surface_alt: Rgba,
     /// A raised surface (cards, buttons).
@@ -229,6 +237,8 @@ impl Palette {
         kind: ThemeKind::Dark,
         background: Rgba::hex(0x12141A),
         surface: Rgba::hex(0x1B1E26),
+        board_backdrop: Rgba::hex(0x1B1E26),
+        board_cell: Rgba::hex(0xC0C0C0),
         surface_alt: Rgba::hex(0x161920),
         surface_raised: Rgba::hex(0x242833),
         surface_hover: Rgba::hex(0x2C3140),
@@ -266,6 +276,10 @@ impl Palette {
         kind: ThemeKind::Light,
         background: Rgba::hex(0xF4F5F8),
         surface: Rgba::hex(0xFFFFFF),
+        // The light board is its own warm-paper variant, not a copy of the
+        // white page surface.
+        board_backdrop: Rgba::hex(0xE7E0CF),
+        board_cell: Rgba::hex(0xFAF6EC),
         surface_alt: Rgba::hex(0xEDEFF3),
         surface_raised: Rgba::hex(0xFFFFFF),
         surface_hover: Rgba::hex(0xE6E9EF),
@@ -344,6 +358,17 @@ mod tests {
         assert_eq!(g.r, g.g);
         assert_eq!(g.g, g.b);
         assert!((srgb_luminance(g) - srgb_luminance(c)).abs() < 0.01);
+    }
+
+    #[test]
+    fn every_theme_has_its_own_board_variant() {
+        // The board must not silently reuse the page surface: the light
+        // theme has a separate warm-paper board.
+        assert_ne!(Palette::LIGHT.board_backdrop, Palette::LIGHT.surface);
+        assert_ne!(Palette::LIGHT.board_cell, Palette::LIGHT.board_backdrop);
+        assert_ne!(Palette::LIGHT.board_backdrop, Palette::DARK.board_backdrop);
+        // The dark theme keeps the original's light-grey plates.
+        assert_eq!(Palette::DARK.board_cell, Rgba::hex(0xC0C0C0));
     }
 
     #[test]

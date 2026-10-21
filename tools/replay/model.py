@@ -9,7 +9,7 @@ TRACE (input)
     seed   <u32>
     board  <81 chars>        optional; 0-7 = colour, '.' = empty
     op move <r0> <c0> <r1> <c1>
-    op click <r> <c>
+    op click <r>
     op newgame
     op setusefigures <0|1>
 
@@ -19,9 +19,18 @@ RESULT (output, one line per event)
     path <step> <r,c> <r,c> ...
     note <step> <text>
 
-The rule model is *parameterised* because several semantics are still TBD
-(see docs/03 Feature Spec, section 7).  The switches below are the knobs the
-black-box phase (docs/01, BB-G03..G08) will pin down.
+Rule facts pinned down by black-box runs against WinLinez v1.30 (2026-10-21):
+
+* a ball may move to any empty cell of the same 4-connected empty region;
+* the moved ball's source cell becomes empty;
+* a turn that creates a straight run of >= 5 same-coloured balls along one of
+  the four axes (row, column, both diagonals) clears the whole run and does
+  **not** consume the next-group preview;
+* a turn that creates no line places the three preview balls, one at a time,
+  at uniformly random empty cells and rolls three replacement colours;
+* score for a clear of total run length L:
+      5 -> 10, 6 -> 12, 7 -> 18, 8 -> 28, 9 -> 42, ...
+  (increments 2, 6, 10, 14, ...)
 """
 from dataclasses import dataclass, field
 
@@ -31,26 +40,25 @@ COLORS = 7
 THRESHOLD = 5
 #: the number of balls the game previews as the "next group"
 GROUP_SIZE = 3
+#: a fresh board starts with the first five balls of the same random stream
+INITIAL_BALLS = 5
 
 # ------------------------------------------------------------------ switches
 @dataclass
 class RuleModel:
-    """Behavioural switches for the (still partly unknown) rule semantics."""
+    """Behavioural switches that are still useful for experiments.
+
+    The original's confirmed values are the defaults.  There is deliberately
+    no "linear points per ball" knob any more: the score table was recovered
+    from the binary and confirmed with a black-box 5-line clear (+10).
+    """
     threshold: int = THRESHOLD
-    #: the source cell of a moved ball keeps its colour (typical "Lines" rule)
-    source_keeps_colour: bool = True
-    #: a path may turn at most this many times (-1 = unlimited)
-    max_turns: int = -1
-    #: refill count after an elimination
-    refill: int = 0
+    #: balls placed after a turn that creates no line
+    spawn_per_move: int = GROUP_SIZE
     #: how many balls a fresh board starts with (the original uses five)
-    initial_balls: int = 5
-    #: score awarded per eliminated ball
-    points_per_ball: int = 1
-    #: minimum score delta for a line to count
-    min_score_delta: int = 0
-    #: allow the path to pass through the source cell
-    allow_revisit_source: bool = True
+    initial_balls: int = INITIAL_BALLS
+    #: kept for experiments; the original always empties the source cell
+    source_keeps_colour: bool = False
 
 # ------------------------------------------------------------------ RNG
 class Lcg:
@@ -70,7 +78,12 @@ class Lcg:
         return 1 + self.next(COLORS)
 
 # ------------------------------------------------------------------ board
-NEIGHBOURS = [(-1, 0), (-1, -1), (0, -1), (1, -1)]   # left, up-left, up, up-right
+#: The four axes scanned by the original's line detector (each axis is
+#: scanned in both directions).  Order: vertical, main diagonal, horizontal,
+#: anti-diagonal -- the order recovered from the binary's direction table.
+AXES = [(-1, 0), (-1, -1), (0, -1), (1, -1)]
+#: 4-neighbour step order used by the path search.
+STEPS4 = [(-1, 0), (1, 0), (0, -1), (0, 1)]
 
 def idx(r: int, c: int) -> int:
     return r * BOARD_SIDE + c
@@ -114,92 +127,83 @@ class Board:
         return [i for i, v in enumerate(self.cells) if v == 0]
 
 # ------------------------------------------------------------------ rules
-def connected_set(board: Board, start: int, colour: int, threshold: int):
-    """Flood-fill the connected component of `colour` containing `start`."""
+def find_lines(board: Board, start: int, colour: int, threshold: int = THRESHOLD):
+    """Find every straight run through `start` that is at least `threshold`.
+
+    Returns ``(total_length, cells)`` where ``total_length`` is the sum of the
+    lengths of all qualifying runs (the original feeds this sum to its score
+    function) and ``cells`` is the union of the marked cells, sorted.
+    """
     if board.cells[start] != colour:
+        return 0, []
+    r0, c0 = rc(start)
+    marked = set()
+    total = 0
+    for dr, dc in AXES:
+        run = [start]
+        for sign in (1, -1):
+            r, c = r0 + sign * dr, c0 + sign * dc
+            while in_bounds(r, c) and board.get(r, c) == colour:
+                run.append(idx(r, c))
+                r += sign * dr
+                c += sign * dc
+        if len(run) >= threshold:
+            total += len(run)
+            marked.update(run)
+    return total, sorted(marked)
+
+def score_for_run(total: int) -> int:
+    """Score for a clear whose qualifying run lengths sum to `total`.
+
+    Recovered from Auto+0x1e1d: 10, 12, 18, 28, 42, ... for 5, 6, 7, 8, 9.
+    """
+    if total < THRESHOLD:
+        return 0
+    score = 10
+    step = 2
+    for _ in range(total - THRESHOLD):
+        score += step
+        step += 4
+    return score
+
+def find_path(board: Board, src: int, dst: int):
+    """Shortest 4-connected path through empty cells, including source."""
+    if src == dst or board.cells[dst] != 0:
         return []
-    seen = {start}
-    stack = [start]
-    out = []
-    while stack:
-        cur = stack.pop()
-        out.append(cur)
+    from collections import deque
+    parent = [-1] * BOARD_CELLS
+    seen = [False] * BOARD_CELLS
+    seen[src] = True
+    q = deque([src])
+    while q:
+        cur = q.popleft()
+        if cur == dst:
+            break
         r, c = rc(cur)
-        for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)):
+        for dr, dc in STEPS4:
             nr, nc = r + dr, c + dc
             if not in_bounds(nr, nc):
                 continue
             n = idx(nr, nc)
-            if n in seen or board.cells[n] != colour:
-                continue
-            seen.add(n)
-            stack.append(n)
-    return out if len(out) >= threshold else []
-
-def find_path(board: Board, src: int, dst: int, colour: int, model: RuleModel):
-    """
-    Search a path from `src` to `dst` over empty cells (8-connected).
-    Returns the list of visited cell indices (excluding src, including dst), or [].
-    Turn counting uses the 4-neighbour table recovered from the binary.
-    """
-    sr, sc = rc(src)
-    dr, dc = rc(dst)
-    if not (in_bounds(dr, dc) and board.cells[idx(dr, dc)] == 0):
-        return []
-    # BFS over states (cell, incoming direction) to count turns
-    start = src
-    best = {}
-    from collections import deque
-    q = deque()
-    for d in range(8):
-        q.append((start, d, [start]))
-        best[(start, d)] = None
-    while q:
-        cur, d, path = q.popleft()
-        r, c = rc(cur)
-        if cur == idx(dr, dc) and cur != start:
-            return path
-        for nd in range(8):
-            ndr = r + (nd // 3 - 1) if False else r + [-1, -1, 0, 1, 1, 1, 0, -1][nd]
-            ndc = c + [-1, 0, 1, 1, 0, -1, -1, -1][nd]
-            if not in_bounds(ndr, ndc):
-                continue
-            n = idx(ndr, ndc)
-            if n == start and not model.allow_revisit_source:
+            if seen[n]:
                 continue
             if n != dst and board.cells[n] != 0:
                 continue
-            turns = path_turns(path, nd)
-            if model.max_turns >= 0 and turns > model.max_turns:
-                continue
-            key = (n, nd)
-            if key in best:
-                continue
-            best[key] = (cur, d, path)
-            q.append((n, nd, path + [n]))
-    return []
-
-DIRS8 = [(-1, 0), (-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1)]
-
-def path_turns(path, incoming_dir):
-    """Number of direction changes along `path` when arriving with `incoming_dir`."""
-    if len(path) < 2:
-        return 0
-    turns = 0
-    prev_dir = None
-    for i in range(1, len(path) + 1):
-        if i == len(path):
-            cur = path[-1]
-            d = incoming_dir
-        else:
-            cur = path[i]
-            r0, c0 = rc(path[i - 1])
-            r1, c1 = rc(cur)
-            d = DIRS8.index((r1 - r0, c1 - c0))
-        if prev_dir is not None and d != prev_dir:
-            turns += 1
-        prev_dir = d
-    return turns
+            seen[n] = True
+            parent[n] = cur
+            q.append(n)
+    if not seen[dst]:
+        return []
+    path = []
+    cur = dst
+    while cur != -1:
+        path.append(cur)
+        if cur == src:
+            break
+        cur = parent[cur]
+    if not path or path[-1] != src:
+        return []
+    return path[::-1]
 
 # ------------------------------------------------------------------ engine
 @dataclass
@@ -227,21 +231,14 @@ class Engine:
     def _new_round(self):
         """Generate a fresh board.
 
-        The original's new game puts **five** random balls on the empty
-        board (docs/11 section 5c) and then rolls the next group of three.
-        The RNG is consumed in exactly this order by the Python, C and Rust
-        implementations, so all three stay bit-identical.
+        The original rolls the three-ball preview first and then places the
+        first five balls from that same stream: each placement consumes the
+        queue head and immediately rolls a replacement colour.  After five
+        placements the preview holds the next three colours.
         """
-        placed = 0
-        guard = 0
-        while placed < self.model.initial_balls and guard < BOARD_CELLS * 4:
-            guard += 1
-            pick = self.rng.next(BOARD_CELLS)
-            if self.board.cells[pick] != 0:
-                continue
-            self.board.cells[pick] = self.rng.colour()
-            placed += 1
         self.roll_next_group()
+        for _ in range(self.model.initial_balls):
+            self._spawn_until_quiet()
 
     def roll_next_group(self):
         """Roll a fresh group of balls to be placed next."""
@@ -256,6 +253,35 @@ class Engine:
         self.next_group[GROUP_SIZE - 1] = self.rng.colour()
         return ball
 
+    def _spawn_one(self) -> bool:
+        """Place one preview ball at a uniformly random empty cell.
+
+        Returns True when the placement created a line (which is cleared
+        without scoring, exactly like the original's refill routine), so the
+        caller must place another ball.  Returns False after a quiet
+        placement, when the board is full, or when no preview remains.
+        """
+        empty = self.board.empty_cells()
+        if not empty:
+            return False
+        pick = empty[self.rng.next(len(empty))]
+        colour = self.take_next_ball()
+        self.board.cells[pick] = colour
+        total, cells = find_lines(self.board, pick, colour, self.model.threshold)
+        if total == 0:
+            return False
+        for i in cells:
+            self.board.cells[i] = 0
+        return True
+
+    def _spawn_until_quiet(self):
+        """The original's refill routine keeps placing while it clears."""
+        guard = 0
+        while self._spawn_one():
+            guard += 1
+            if guard > BOARD_CELLS:
+                break
+
     # -- operations --------------------------------------------------
     def op_newgame(self):
         self.board = Board()
@@ -269,7 +295,7 @@ class Engine:
         if colour == 0 or self.board.get(r1, c1) != 0:
             self._emit("note", text="illegal move")
             return
-        path = find_path(self.board, src, dst, colour, self.model)
+        path = find_path(self.board, src, dst)
         if not path:
             self._emit("note", text="no path")
             return
@@ -277,24 +303,18 @@ class Engine:
         if not self.model.source_keeps_colour:
             self.board.set(r0, c0, 0)
         self._emit("path", cells=[rc(i) for i in path])
-        group = connected_set(self.board, dst, colour, self.model.threshold)
-        if not group:
-            self._emit("state", board=fmt_board(self.board.cells), score=self.score)
-            return
-        delta = len(group) * self.model.points_per_ball
-        if delta < self.model.min_score_delta:
-            self._emit("state", board=fmt_board(self.board.cells), score=self.score)
-            return
-        for i in group:
-            self.board.set(*rc(i), 0)
-        self.score += delta
-        self._emit("elim", cells=[rc(i) for i in sorted(group)], delta=delta)
-        for _ in range(self.model.refill):
-            if self.board.is_full():
-                break
-            pick = self.rng.next(BOARD_CELLS)
-            colour = self.take_next_ball()
-            self.board.set(*rc(pick), colour)
+
+        total, cells = find_lines(self.board, dst, colour, self.model.threshold)
+        if total >= self.model.threshold:
+            for i in cells:
+                self.board.cells[i] = 0
+            delta = score_for_run(total)
+            self.score += delta
+            self._emit("elim", cells=[rc(i) for i in cells], delta=delta)
+            # A clearing move does NOT consume the preview group.
+        else:
+            for _ in range(self.model.spawn_per_move):
+                self._spawn_until_quiet()
         self._emit("state", board=fmt_board(self.board.cells), score=self.score)
 
     def op_click(self, r, c):

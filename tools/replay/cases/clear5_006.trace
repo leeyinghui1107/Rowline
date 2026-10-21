@@ -1,0 +1,4 @@
+# bridge a straight five: expect +10 and no refill
+seed 7
+board 1...................................1111.........................................
+op move 0 0 4 4

@@ -1,9 +1,0 @@
-wl-dpi-probe: display environment
-  monitor \\.\DISPLAY1                 3120x2080 px  scale 2.00  at (0, 0)
-      -> logical client area 1560 x 1040  (board needs >= 880 x 892: ok)
-  monitor \\.\DISPLAY1                 3120x2080 px  scale 2.00  at (0, 0)
-      -> logical client area 1560 x 1040  (board needs >= 880 x 892: ok)
-
-  1 monitor(s)
-    Finished `release` profile [optimized] target(s) in 0.12s
-     Running `target\release\rowline-dpi-probe.exe`

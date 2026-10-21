@@ -19,6 +19,7 @@ impl Command {
             512 => "Next set",
             513 => "Show statistics",
             514 => "Use figures",
+            515 => "Fixed scale",
             768 => "Contents",
             769 => "About",
             16528 => "Help",
@@ -35,6 +36,7 @@ impl Command {
             512 => "F3",
             513 => "F5",
             514 => "F6",
+            515 => "Ctrl+R",
             768 => "F1",
             769 => "",
             16528 => "",
@@ -54,6 +56,11 @@ impl Command {
     pub const TOGGLE_STATISTICS: Command = Command(513);
     /// Toggle the polygon sprite set -- `使用形状`, accelerator F6.
     pub const TOGGLE_USE_FIGURES: Command = Command(514);
+    /// Toggle the fixed-resolution display policy.
+    ///
+    /// This is a re-implementation extension (the original only has the
+    /// `Ctrl+R` key); it uses an id outside the original's nine commands.
+    pub const TOGGLE_FIXED_SCALE: Command = Command(515);
     /// Open the help contents -- `内容(&C)`, accelerator F1.
     pub const CONTENTS: Command = Command(768);
     /// Open the about box -- `关于(&A)...`.
@@ -107,6 +114,7 @@ pub fn icon_for(cmd: Command) -> Option<u32> {
         Command::TOGGLE_NEXT_SET => ICON_NEXT,
         Command::TOGGLE_STATISTICS => ICON_STATS,
         Command::TOGGLE_USE_FIGURES => ICON_FIGURES,
+        Command::TOGGLE_FIXED_SCALE => ICON_SETTINGS,
         Command::HELP => ICON_HELP,
         Command::CONTENTS => ICON_CONTENTS,
         Command::ABOUT => ICON_ABOUT,
@@ -115,13 +123,14 @@ pub fn icon_for(cmd: Command) -> Option<u32> {
 }
 
 /// Every command, for building a menu.
-pub const ALL: [Command; 9] = [
+pub const ALL: [Command; 10] = [
     Command::NEW_GAME,
     Command::SHOW_HIGH_SCORES,
     Command::EXIT,
     Command::TOGGLE_NEXT_SET,
     Command::TOGGLE_STATISTICS,
     Command::TOGGLE_USE_FIGURES,
+    Command::TOGGLE_FIXED_SCALE,
     Command::HELP,
     Command::CONTENTS,
     Command::ABOUT,

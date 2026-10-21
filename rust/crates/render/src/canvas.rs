@@ -116,16 +116,16 @@ impl SoftwareCanvas {
                 style,
             ),
             RenderCmd::Outline { rect, color } => {
-                let (x, y) = (rect.x as i32, rect.y as i32);
-                let (w, h) = (rect.width as i32, rect.height as i32);
-                for xx in x..x + w {
-                    self.put(xx, y, color);
-                    self.put(xx, y + h - 1, color);
-                }
-                for yy in y..y + h {
-                    self.put(x, yy, color);
-                    self.put(x + w - 1, yy, color);
-                }
+                let k = self.content_scale;
+                let x = (self.content_rect.x + rect.x * k) as i32;
+                let y = (self.content_rect.y + rect.y * k) as i32;
+                let w = (rect.width * k).max(1.0) as i32;
+                let h = (rect.height * k).max(1.0) as i32;
+                let t = k.max(1.0) as i32;
+                self.fill_rect(x, y, w, t, color);
+                self.fill_rect(x, y + h - t, w, t, color);
+                self.fill_rect(x, y, t, h, color);
+                self.fill_rect(x + w - t, y, t, h, color);
             }
             RenderCmd::RoundedRect {
                 rect,
@@ -247,15 +247,19 @@ impl SoftwareCanvas {
             FrameStyle::Raised => (Color::rgb(255, 255, 255), Color::rgb(128, 128, 128)),
             FrameStyle::Flat => (Color::rgb(128, 128, 128), Color::rgb(128, 128, 128)),
         };
+        // The rect arrives in logical units; scale it like every other
+        // primitive.
+        let k = self.content_scale;
+        let x = (self.content_rect.x + x as f32 * k) as i32;
+        let y = (self.content_rect.y + y as f32 * k) as i32;
+        let w = (w as f32 * k).max(1.0) as i32;
+        let h = (h as f32 * k).max(1.0) as i32;
+        let t = k.max(1.0) as i32;
         // top + left in `dark`, bottom + right in `light` (sunken look)
-        for xx in x..x + w {
-            self.put(xx, y, dark);
-            self.put(xx, y + h - 1, light);
-        }
-        for yy in y..y + h {
-            self.put(x, yy, dark);
-            self.put(x + w - 1, yy, light);
-        }
+        self.fill_rect(x, y, w, t, dark);
+        self.fill_rect(x, y + h - t, w, t, light);
+        self.fill_rect(x, y, t, h, dark);
+        self.fill_rect(x + w - t, y, t, h, light);
     }
 
     /// The icon atlas: a horizontal strip of square cells.
@@ -373,8 +377,14 @@ impl SoftwareCanvas {
         let sy = src.y as i32;
         let cw = src.width as i32;
         let ch = src.height as i32;
-        let dw = size.width as i32;
-        let dh = size.height as i32;
+        // The destination is in logical units; the canvas is physical, so
+        // the sprite must grow with the content scale exactly like the
+        // shapes and icons do.
+        let k = self.content_scale;
+        let dw = (size.width * k).max(1.0) as i32;
+        let dh = (size.height * k).max(1.0) as i32;
+        let ox = (self.content_rect.x + dx as f32 * k) as i32;
+        let oy = (self.content_rect.y + dy as f32 * k) as i32;
         for j in 0..dh {
             for i in 0..dw {
                 let tx = sx + (i * cw) / dw.max(1);
@@ -383,7 +393,7 @@ impl SoftwareCanvas {
                     continue;
                 }
                 let p = *sheet.get_pixel(tx as u32, ty as u32);
-                self.put(dx + i, dy + j, Color::rgba(p[0], p[1], p[2], p[3]));
+                self.put(ox + i, oy + j, Color::rgba(p[0], p[1], p[2], p[3]));
             }
         }
     }

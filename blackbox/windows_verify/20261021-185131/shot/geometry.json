@@ -10,20 +10,20 @@
  "frame_candidates": 1,
  "board_origin": [
   348,
-  268
+  242
  ],
  "frame_rect": [
   348,
-  268,
+  242,
   674,
-  595
+  569
  ],
  "occupied_cells": 67,
  "grid_side": 9,
  "coverage": 1.0,
  "first_coloured_px": [
   354,
-  274
+  248
  ],
  "sprite_pad": [
   4,

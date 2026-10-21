@@ -51,7 +51,9 @@ impl Default for Settings {
             window_height: 960,
             window_maximized: false,
             show_next: true,
-            show_statistics: true,
+            // The original ships with ShowStatistics=0: the statistics
+            // window is opt-in (F5 / 选项 · 显示统计).
+            show_statistics: false,
             use_figures: false,
             theme: 0,
             reduced_motion: false,

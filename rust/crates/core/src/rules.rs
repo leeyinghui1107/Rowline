@@ -1,303 +1,185 @@
-//! The rules: path search, connected-group detection and elimination.
+//! The rules: path search, straight-line detection, scoring and game over.
 //!
-//! Every quantity that the black-box phase has not yet pinned down is a
-//! field of [`RuleModel`].  Keeping them here (rather than as constants)
-//! means the differential replay gate can be re-run against a different
-//! hypothesis by changing one struct, and the C / Python / Rust
-//! implementations can be compared for the *same* hypothesis.
+//! These semantics were recovered from WinLinez v1.30's binary and confirmed
+//! with black-box runs (docs/11, `blackbox/checklist.json`):
+//!
+//! * a ball moves to any empty cell in its 4-connected empty region;
+//! * the source cell becomes empty;
+//! * a line is a straight run of at least five same-coloured balls along a
+//!   row, a column, or one of the two diagonals -- a bent blob does not clear;
+//! * a clearing turn does not consume the three-ball preview; a quiet turn
+//!   places the preview balls;
+//! * the score table is 10, 12, 18, 28, 42, ... for runs of 5, 6, 7, 8, 9.
 
 use crate::board::{coords, in_bounds, index, Board, BOARD_CELLS, EMPTY};
 
-/// Behavioural switches for the rules whose exact semantics are still TBD.
-///
-/// | field | black-box case |
-/// |---|---|
-/// | `threshold` | BB-G03 |
-/// | `source_keeps_colour` | BB-G03 |
-/// | `max_turns` | BB-G04 |
-/// | `refill` | BB-G02 / BB-G06 |
-/// | `points_per_ball` | BB-G11 |
-/// | `min_score_delta` | BB-G11 |
-/// | `allow_revisit_source` | BB-G05 |
-/// | `initial_balls` | BB-G01 |
+/// The parts of the rule model that are useful for experiments.  The
+/// original's confirmed values are the defaults; there is no linear
+/// points-per-ball knob any more because the score table is non-linear.
 #[derive(Clone, Copy, Debug)]
 pub struct RuleModel {
-    /// Cells needed in a line to clear it.
+    /// Cells needed in a straight run to clear it.
     pub threshold: usize,
-    /// Whether the moved ball's old cell keeps its colour.
-    pub source_keeps_colour: bool,
-    /// Maximum number of direction changes in a path (`None` = unlimited).
-    pub max_turns: Option<usize>,
-    /// Balls added after an elimination.
-    pub refill: usize,
+    /// Balls placed after a turn that creates no line.
+    pub spawn_per_move: usize,
     /// How many balls a fresh board starts with.
-    ///
-    /// The original's new game places **five** random balls on the empty
-    /// board (docs/11 section 5c).
     pub initial_balls: usize,
-    /// Score awarded per eliminated ball.
-    pub points_per_ball: i64,
-    /// Minimum score delta for a line to count.
-    pub min_score_delta: i64,
-    /// Whether a path may pass through the source cell.
-    pub allow_revisit_source: bool,
+    /// Experiments only; the original always empties the source cell.
+    pub source_keeps_colour: bool,
 }
 
 impl Default for RuleModel {
     fn default() -> Self {
         RuleModel {
             threshold: crate::THRESHOLD,
-            source_keeps_colour: true,
-            max_turns: None,
-            refill: 0,
+            spawn_per_move: crate::engine::GROUP_SIZE,
             initial_balls: 5,
-            points_per_ball: 1,
-            min_score_delta: 0,
-            allow_revisit_source: true,
+            source_keeps_colour: false,
         }
     }
 }
 
-/// The eight directions in the canonical order used by the path search.
+/// The four axes scanned by the original's line detector (each axis is
+/// scanned in both directions): vertical, main diagonal, horizontal,
+/// anti-diagonal.  Order recovered from the binary at `0x40A000`.
+pub const AXES: [(isize, isize); 4] = [(-1, 0), (-1, -1), (0, -1), (1, -1)];
+
+/// 4-neighbour step order used by the path search.
+pub const STEPS4: [(isize, isize); 4] = [(-1, 0), (1, 0), (0, -1), (0, 1)];
+
+/// Every straight run through `start` of at least `threshold` cells.
 ///
-/// The order matters: it decides which of several equally long paths is
-/// found first, and therefore which set of cells gets eliminated.
-pub const DIR_R: [isize; 8] = [-1, -1, 0, 1, 1, 1, 0, -1];
-pub const DIR_C: [isize; 8] = [-1, 0, 1, 1, 0, -1, -1, -1];
-
-/// The eight neighbours used by the flood fill (a different order from
-/// [`DIR_R`]; the result is sorted afterwards, so the order is irrelevant).
-const NBR_R: [isize; 8] = [-1, 1, 0, 0, -1, -1, 1, 1];
-const NBR_C: [isize; 8] = [0, 0, -1, 1, -1, 1, -1, 1];
-
-fn dir_between(r0: isize, c0: isize, r1: isize, c1: isize) -> Option<usize> {
-    (0..8).find(|&k| DIR_R[k] == r1 - r0 && DIR_C[k] == c1 - c0)
+/// Returns `(total, cells)`: `total` is the sum of the qualifying run
+/// lengths (the original's score function receives this sum), and `cells`
+/// is the sorted union of the marked cells.
+pub fn find_lines(
+    board: &Board,
+    start: usize,
+    colour: u8,
+    threshold: usize,
+) -> (usize, Vec<usize>) {
+    if board.cells()[start] != colour {
+        return (0, Vec::new());
+    }
+    let (r0, c0) = coords(start);
+    let mut marked = [false; BOARD_CELLS];
+    let mut total = 0usize;
+    for &(dr, dc) in &AXES {
+        let mut run = vec![start];
+        for sign in [1isize, -1] {
+            let mut r = r0 as isize + sign * dr;
+            let mut c = c0 as isize + sign * dc;
+            while in_bounds(r, c) && board.get(r as usize, c as usize) == colour {
+                run.push(index(r as usize, c as usize));
+                r += sign * dr;
+                c += sign * dc;
+            }
+        }
+        if run.len() >= threshold {
+            total += run.len();
+            for &cell in &run {
+                marked[cell] = true;
+            }
+        }
+    }
+    if total == 0 {
+        return (0, Vec::new());
+    }
+    let cells = (0..BOARD_CELLS).filter(|&i| marked[i]).collect();
+    (total, cells)
 }
 
-/// Number of direction changes along `path`, where the final edge arrives
-/// with direction `incoming`.
+/// Score for a clear whose qualifying run lengths sum to `total`.
 ///
-/// Kept byte-for-byte equivalent to the Python and C references so that a
-/// non-default `max_turns` produces identical results in all three.
-fn path_turns(path: &[usize], incoming: usize) -> usize {
-    if path.len() < 2 {
+/// Recovered from `Auto+0x1e1d`: 5 -> 10, 6 -> 12, 7 -> 18, 8 -> 28, 9 -> 42.
+pub fn score_for_run(total: usize) -> i64 {
+    if total < crate::THRESHOLD {
         return 0;
     }
-    let mut turns = 0usize;
-    let mut prev_dir: Option<usize> = None;
-    for i in 1..=path.len() {
-        let d = if i == path.len() {
-            incoming
-        } else {
-            let (r0, c0) = coords(path[i - 1]);
-            let (r1, c1) = coords(path[i]);
-            match dir_between(r0 as isize, c0 as isize, r1 as isize, c1 as isize) {
-                Some(k) => k,
-                None => continue,
-            }
-        };
-        if let Some(p) = prev_dir {
-            if p != d {
-                turns += 1;
-            }
-        }
-        prev_dir = Some(d);
+    let mut score = 10i64;
+    let mut step = 2i64;
+    for _ in 0..(total - crate::THRESHOLD) {
+        score += step;
+        step += 4;
     }
-    turns
+    score
 }
 
-/// The largest connected same-colour group containing `start`.
+/// Shortest 4-connected path from `src` to `dst` through empty cells.
 ///
-/// Returns the group **sorted ascending** when it reaches `threshold`,
-/// otherwise an empty vector.
-pub fn connected_group(board: &Board, start: usize, colour: u8, threshold: usize) -> Vec<usize> {
-    if board.cells()[start] != colour {
+/// The returned vector includes the source and the destination.  An empty
+/// vector means the destination is occupied or unreachable.
+pub fn find_path(board: &Board, src: usize, dst: usize) -> Vec<usize> {
+    if src == dst || board.cells()[dst] != EMPTY {
         return Vec::new();
     }
+    let mut parent = [usize::MAX; BOARD_CELLS];
     let mut seen = [false; BOARD_CELLS];
-    let mut stack = vec![start];
-    let mut out = Vec::new();
-    seen[start] = true;
-    while let Some(cur) = stack.pop() {
-        out.push(cur);
+    seen[src] = true;
+    let mut queue = std::collections::VecDeque::new();
+    queue.push_back(src);
+    while let Some(cur) = queue.pop_front() {
+        if cur == dst {
+            break;
+        }
         let (r, c) = coords(cur);
-        for k in 0..8 {
-            let nr = r as isize + NBR_R[k];
-            let nc = c as isize + NBR_C[k];
+        for &(dr, dc) in &STEPS4 {
+            let nr = r as isize + dr;
+            let nc = c as isize + dc;
             if !in_bounds(nr, nc) {
                 continue;
             }
             let n = index(nr as usize, nc as usize);
-            if seen[n] || board.cells()[n] != colour {
-                continue;
-            }
-            seen[n] = true;
-            stack.push(n);
-        }
-    }
-    if out.len() >= threshold {
-        out.sort_unstable();
-        out
-    } else {
-        Vec::new()
-    }
-}
-
-/// Find a path from `src` to `dst` across empty cells (8-connected).
-///
-/// Returns the visited cells **including** the source, or an empty vector
-/// when no path exists.  The search order matches the Python and C
-/// references exactly.
-pub fn find_path(board: &Board, src: usize, dst: usize, model: &RuleModel) -> Vec<usize> {
-    if board.cells()[dst] != EMPTY {
-        return Vec::new();
-    }
-    let mut visited = [false; BOARD_CELLS * 8];
-    let mut queue: Vec<(usize, usize, Vec<usize>)> = Vec::with_capacity(BOARD_CELLS * 8);
-    for d in 0..8 {
-        visited[src * 8 + d] = true;
-        queue.push((src, d, vec![src]));
-    }
-    let mut head = 0usize;
-    while head < queue.len() {
-        let (cur, _d, path) = queue[head].clone();
-        head += 1;
-        if cur == dst && cur != src {
-            return path;
-        }
-        let (r, c) = coords(cur);
-        for nd in 0..8 {
-            let nr = r as isize + DIR_R[nd];
-            let nc = c as isize + DIR_C[nd];
-            if !in_bounds(nr, nc) {
-                continue;
-            }
-            let n = index(nr as usize, nc as usize);
-            if n == src && !model.allow_revisit_source {
+            if seen[n] {
                 continue;
             }
             if n != dst && board.cells()[n] != EMPTY {
                 continue;
             }
-            if let Some(max) = model.max_turns {
-                if path_turns(&path, nd) > max {
-                    continue;
-                }
-            }
-            let key = n * 8 + nd;
-            if visited[key] {
-                continue;
-            }
-            visited[key] = true;
-            let mut next = path.clone();
-            next.push(n);
-            queue.push((n, nd, next));
+            seen[n] = true;
+            parent[n] = cur;
+            queue.push_back(n);
         }
     }
-    Vec::new()
+    if !seen[dst] {
+        return Vec::new();
+    }
+    let mut path = Vec::new();
+    let mut cur = dst;
+    loop {
+        path.push(cur);
+        if cur == src {
+            break;
+        }
+        cur = parent[cur];
+    }
+    path.reverse();
+    path
 }
 
-/// `true` when at least one ball can be moved to a cell that completes a line.
+/// `true` while the round can continue.
 ///
-/// This is the end-of-game condition: when no move is possible the original
-/// shows the `游戏结束!` dialog (docs/11 section 5).
-pub fn has_legal_move(board: &Board, threshold: usize) -> bool {
-    let empty: Vec<usize> = (0..board.cells().len())
-        .filter(|&i| board.cells()[i] == 0)
-        .collect();
-    if empty.is_empty() {
-        // A full board can still be cleared if a line already exists.
-        return true;
-    }
-    for start in 0..board.cells().len() {
-        let colour = board.cells()[start];
-        if colour == 0 {
-            continue;
-        }
-        // The reachable empty cells from this ball.
-        let mut seen = [false; BOARD_CELLS];
-        let mut stack = vec![start];
-        seen[start] = true;
-        let mut reachable = Vec::new();
-        while let Some(cur) = stack.pop() {
-            let (r, c) = coords(cur);
-            for k in 0..8 {
-                let nr = r as isize + DIR_R[k];
-                let nc = c as isize + DIR_C[k];
-                if !in_bounds(nr, nc) {
-                    continue;
-                }
-                let n = index(nr as usize, nc as usize);
-                if seen[n] {
-                    continue;
-                }
-                seen[n] = true;
-                if board.cells()[n] == 0 {
-                    reachable.push(n);
-                    stack.push(n);
-                }
-            }
-        }
-        for target in reachable {
-            // Would the ball be part of a line at `target`?
-            let mut probe = board.clone();
-            probe.cells_mut()[target] = colour;
-            if !connected_group(&probe, target, colour, threshold).is_empty() {
-                return true;
-            }
-        }
-    }
-    false
+/// The original only ends the game when the board is full after the refill
+/// (`Auto+0x403301`: `Game_CountEmpty` == 0 -> game-over dialog).  It does
+/// not test whether a line can still be completed.
+pub fn has_legal_move(board: &Board, _threshold: usize) -> bool {
+    !board.is_full()
 }
-
-/// The four neighbour offsets recovered from the original (row-major scan
-/// order: left, up-left, up, up-right).
-pub const NEIGHBOURS: [(isize, isize); 4] = [(-1, 0), (-1, -1), (0, -1), (1, -1)];
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn a_full_single_colour_board_is_playable() {
-        // Every cell is the same colour: any move joins a line.
-        let mut b = Board::new();
-        for i in 0..b.cells().len() {
-            b.cells_mut()[i] = 1;
-        }
-        assert!(has_legal_move(&b, 5));
-    }
-
-    #[test]
-    fn a_board_with_only_isolated_balls_is_dead() {
-        // Colours that never form a line of five, and no room to move.
-        let mut b = Board::new();
-        for i in 0..b.cells().len() {
-            b.cells_mut()[i] = (i % 3 + 1) as u8;
-        }
-        // The board is full, so only an existing line would count.
-        assert!(!has_legal_move(&b, 5) || b.cells().iter().any(|&c| c != 0));
-    }
-
-    #[test]
-    fn a_board_with_a_free_line_is_playable() {
-        let mut b = Board::new();
-        // Four in a row plus an empty cell next to them.
-        for (i, c) in [(0usize, 1u8), (1, 1), (2, 1), (3, 1)] {
-            b.cells_mut()[i] = c;
-        }
-        assert!(has_legal_move(&b, 5));
-    }
-
-    #[test]
-    fn a_five_group_is_found_and_sorted() {
+    fn a_straight_five_is_found_and_sorted() {
         let mut b = Board::new();
         for c in 0..5 {
             b.set(4, c, 3);
         }
-        let g = connected_group(&b, index(4, 0), 3, 5);
+        let (total, cells) = find_lines(&b, index(4, 2), 3, 5);
+        assert_eq!(total, 5);
         assert_eq!(
-            g,
+            cells,
             vec![
                 index(4, 0),
                 index(4, 1),
@@ -309,39 +191,84 @@ mod tests {
     }
 
     #[test]
-    fn a_four_group_is_below_the_threshold() {
+    fn a_straight_four_is_below_the_threshold() {
         let mut b = Board::new();
         for c in 0..4 {
             b.set(4, c, 3);
         }
-        assert!(connected_group(&b, index(4, 0), 3, 5).is_empty());
+        assert_eq!(find_lines(&b, index(4, 1), 3, 5), (0, Vec::new()));
+    }
+
+    #[test]
+    fn a_bent_five_does_not_clear() {
+        // Four along the row plus one below the end: connected, but no
+        // straight run of five.
+        let mut b = Board::new();
+        for c in 0..4 {
+            b.set(4, c, 3);
+        }
+        b.set(5, 0, 3);
+        assert_eq!(find_lines(&b, index(5, 0), 3, 5), (0, Vec::new()));
+    }
+
+    #[test]
+    fn a_bridged_six_scores_twelve() {
+        let mut b = Board::new();
+        // 3 . 2 -> placing the gap makes six in a row.
+        for c in 0..3 {
+            b.set(0, c, 3);
+        }
+        b.set(0, 4, 3);
+        b.set(0, 5, 3);
+        b.set(0, 3, 3);
+        let (total, cells) = find_lines(&b, index(0, 3), 3, 5);
+        assert_eq!(total, 6);
+        assert_eq!(cells.len(), 6);
+        assert_eq!(score_for_run(total), 12);
+    }
+
+    #[test]
+    fn the_score_table_matches_the_binary() {
+        assert_eq!(score_for_run(4), 0);
+        assert_eq!(score_for_run(5), 10);
+        assert_eq!(score_for_run(6), 12);
+        assert_eq!(score_for_run(7), 18);
+        assert_eq!(score_for_run(8), 28);
+        assert_eq!(score_for_run(9), 42);
     }
 
     #[test]
     fn an_occupied_destination_has_no_path() {
         let mut b = Board::new();
-        b.set(0, 1, 4); // the target cell is taken
-        let model = RuleModel::default();
-        assert!(find_path(&b, index(0, 0), index(0, 1), &model).is_empty());
+        b.set(0, 1, 4);
+        assert!(find_path(&b, index(0, 0), index(0, 1)).is_empty());
     }
 
     #[test]
-    fn a_walled_in_target_has_no_path() {
+    fn a_diagonal_gap_is_not_a_path() {
+        // (0,0) and (1,1) touch diagonally but the orthogonal route is
+        // blocked, so the 4-connected search must fail.
         let mut b = Board::new();
-        // wall off (4,4) with balls on every orthogonal side
-        b.set(3, 4, 1);
-        b.set(5, 4, 1);
-        b.set(4, 3, 1);
-        b.set(4, 5, 1);
-        let model = RuleModel::default();
-        // diagonally reachable only -- 8-connected paths may still exist,
-        // so assert on the *orthogonal* case instead
-        let mut c = Board::new();
-        for k in 0..9 {
-            c.set(4, k, 1);
-            c.set(k, 4, 1);
+        b.set(0, 1, 1);
+        b.set(1, 0, 1);
+        assert!(find_path(&b, index(0, 0), index(1, 1)).is_empty());
+    }
+
+    #[test]
+    fn a_shortest_orthogonal_path_is_found() {
+        let b = Board::new();
+        let path = find_path(&b, index(0, 0), index(2, 2));
+        assert_eq!(path.len(), 5);
+        assert_eq!(path.first(), Some(&index(0, 0)));
+        assert_eq!(path.last(), Some(&index(2, 2)));
+    }
+
+    #[test]
+    fn a_full_board_is_game_over() {
+        let mut b = Board::new();
+        for i in 0..BOARD_CELLS {
+            b.cells_mut()[i] = 1;
         }
-        c.set(8, 8, 0);
-        assert!(find_path(&c, index(0, 0), index(8, 8), &model).is_empty());
+        assert!(!has_legal_move(&b, 5));
     }
 }

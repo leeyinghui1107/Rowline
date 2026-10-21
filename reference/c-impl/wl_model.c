@@ -56,140 +56,120 @@ int wl_board_full(const wl_board *b)
 void wl_rule_model_default(wl_rule_model *m)
 {
     m->threshold           = WL_THRESHOLD;
-    m->source_keeps_colour = 1;
-    m->max_turns           = -1;
-    m->refill              = 0;
+    m->spawn_per_move      = WL_GROUP_SIZE;
     m->initial_balls       = 5;
-    m->points_per_ball     = 1;
-    m->min_score_delta     = 0;
-    m->allow_revisit_source= 1;
-}
-
-static const int NBR8_R[8] = { -1,  1,  0,  0, -1, -1,  1,  1 };
-static const int NBR8_C[8] = {  0,  0, -1,  1, -1,  1, -1,  1 };
-
-/* 8 directions in the canonical order used by the reference implementation. */
-static const int DIR_R[8] = { -1, -1,  0,  1,  1,  1,  0, -1 };
-static const int DIR_C[8] = { -1,  0,  1,  1,  0, -1, -1, -1 };
-
-int wl_connected_group(const wl_board *b, int start, int colour, int threshold,
-                       int *out_cells)
-{
-    int stack[WL_CELLS], sp = 0;
-    uint8_t seen[WL_CELLS];
-    int count = 0, i;
-
-    memset(seen, 0, sizeof seen);
-    if (b->cell[start] != colour) return 0;
-
-    stack[sp++] = start;
-    seen[start] = 1;
-    while (sp > 0) {
-        int cur = stack[--sp];
-        int r, c, k;
-        wl_rc(cur, &r, &c);
-        out_cells[count++] = cur;
-        for (k = 0; k < 8; k++) {
-            int nr = r + NBR8_R[k], nc = c + NBR8_C[k], n;
-            if (!wl_in_bounds(nr, nc)) continue;
-            n = wl_idx(nr, nc);
-            if (seen[n] || b->cell[n] != colour) continue;
-            seen[n] = 1;
-            stack[sp++] = n;
-        }
-    }
-    (void)i;
-    return (count >= threshold) ? count : 0;
-}
-
-/* Direction index between two adjacent cells, or -1. */
-static int dir_between(int r0, int c0, int r1, int c1)
-{
-    int k;
-    for (k = 0; k < 8; k++)
-        if (DIR_R[k] == (r1 - r0) && DIR_C[k] == (c1 - c0)) return k;
-    return -1;
+    m->source_keeps_colour = 0;
 }
 
 /*
- * Number of direction changes along `path`, where the final edge arrives with
- * direction `incoming`.  Kept byte-for-byte equivalent to the reference
- * implementation so that a non-default max_turns produces identical results.
+ * The four axes recovered from the binary's direction table at 0x40A000:
+ * vertical, main diagonal, horizontal, anti-diagonal.  Each axis is scanned
+ * in both directions from the placed ball.
  */
-static int path_turns(const int *path, int len, int incoming)
+static const int AXIS_R[4] = { -1, -1,  0,  1 };
+static const int AXIS_C[4] = {  0, -1, -1, -1 };
+
+/* 4-neighbour step order used by the original path search. */
+static const int STEP_R[4] = { -1,  1,  0,  0 };
+static const int STEP_C[4] = {  0,  0, -1,  1 };
+
+int wl_find_lines(const wl_board *b, int start, int colour, int threshold,
+                  int *out_cells, int *out_count)
 {
-    int turns = 0, prev_dir = -1, i;
-    if (len < 2) return 0;
-    for (i = 1; i <= len; i++) {
-        int d;
-        if (i == len) {
-            d = incoming;
-        } else {
-            int r0, c0, r1, c1;
-            wl_rc(path[i - 1], &r0, &c0);
-            wl_rc(path[i], &r1, &c1);
-            d = dir_between(r0, c0, r1, c1);
-        }
-        if (prev_dir >= 0 && d != prev_dir) turns++;
-        prev_dir = d;
+    uint8_t marked[WL_CELLS];
+    int r0, c0, axis, i, total = 0, count = 0;
+
+    if (b->cell[start] != colour) {
+        if (out_count) *out_count = 0;
+        return 0;
     }
-    return turns;
+    memset(marked, 0, sizeof marked);
+    wl_rc(start, &r0, &c0);
+
+    for (axis = 0; axis < 4; axis++) {
+        int run[WL_CELLS];
+        int run_len = 0, sign;
+        run[run_len++] = start;
+        for (sign = 1; sign >= -1; sign -= 2) {
+            int r = r0 + sign * AXIS_R[axis];
+            int c = c0 + sign * AXIS_C[axis];
+            while (wl_in_bounds(r, c) && b->cell[wl_idx(r, c)] == colour) {
+                run[run_len++] = wl_idx(r, c);
+                r += sign * AXIS_R[axis];
+                c += sign * AXIS_C[axis];
+            }
+        }
+        if (run_len >= threshold) {
+            total += run_len;
+            for (i = 0; i < run_len; i++) marked[run[i]] = 1;
+        }
+    }
+    if (total == 0) {
+        if (out_count) *out_count = 0;
+        return 0;
+    }
+    for (i = 0; i < WL_CELLS; i++)
+        if (marked[i]) out_cells[count++] = i;
+    if (out_count) *out_count = count;
+    return total;
 }
 
-typedef struct {
-    int cell;
-    int dir;
-    int path[WL_CELLS * 2];
-    int len;
-} wl_qnode;
+int wl_score_for_run(int total)
+{
+    int score = 10, step = 2, extra;
+    if (total < WL_THRESHOLD) return 0;
+    extra = total - WL_THRESHOLD;
+    while (extra-- > 0) {
+        score += step;
+        step += 4;
+    }
+    return score;
+}
 
-int wl_find_path(const wl_board *b, int src, int dst, const wl_rule_model *m,
+int wl_find_path(const wl_board *b, int src, int dst,
                  int *out_path, int out_cap)
 {
-    static uint8_t visited[WL_CELLS * 8];
-    static wl_qnode q[WL_CELLS * 8 * 8];
-    int qh = 0, qt = 0, d;
-    int dr = dst / WL_SIDE, dc = dst % WL_SIDE;
+    static uint8_t seen[WL_CELLS];
+    static int parent[WL_CELLS];
+    int queue[WL_CELLS], qh = 0, qt = 0;
+    int tmp[WL_CELLS], len = 0, cur, i;
 
-    if (!wl_in_bounds(dr, dc)) return 0;
+    if (src == dst) return 0;
     if (b->cell[dst] != 0) return 0;
 
-    memset(visited, 0, sizeof visited);
-    for (d = 0; d < 8; d++) {
-        wl_qnode *n = &q[qt++];
-        n->cell = src; n->dir = d; n->len = 1; n->path[0] = src;
-        visited[src * 8 + d] = 1;
-    }
+    memset(seen, 0, sizeof seen);
+    seen[src] = 1;
+    parent[src] = -1;
+    queue[qt++] = src;
 
     while (qh < qt) {
-        wl_qnode cur = q[qh++];
-        int r, c, nd;
-        wl_rc(cur.cell, &r, &c);
-        if (cur.cell == dst && cur.cell != src) {
-            int i;
-            for (i = 0; i < cur.len && i < out_cap; i++) out_path[i] = cur.path[i];
-            return cur.len;
-        }
-        for (nd = 0; nd < 8; nd++) {
-            int nr = r + DIR_R[nd], nc = c + DIR_C[nd], n, key, turns;
-            wl_qnode *nn;
+        int r, c, k;
+        cur = queue[qh++];
+        if (cur == dst) break;
+        wl_rc(cur, &r, &c);
+        for (k = 0; k < 4; k++) {
+            int nr = r + STEP_R[k], nc = c + STEP_C[k], n;
             if (!wl_in_bounds(nr, nc)) continue;
             n = wl_idx(nr, nc);
-            if (n == src && !m->allow_revisit_source) continue;
+            if (seen[n]) continue;
             if (n != dst && b->cell[n] != 0) continue;
-            turns = path_turns(cur.path, cur.len, nd);
-            if (m->max_turns >= 0 && turns > m->max_turns) continue;
-            key = n * 8 + nd;
-            if (visited[key]) continue;
-            visited[key] = 1;
-            nn = &q[qt++];
-            nn->cell = n; nn->dir = nd; nn->len = cur.len;
-            memcpy(nn->path, cur.path, sizeof(int) * (size_t)cur.len);
-            nn->path[cur.len] = n;
-            nn->len = cur.len + 1;
+            seen[n] = 1;
+            parent[n] = cur;
+            queue[qt++] = n;
         }
     }
-    return 0;
+    if (!seen[dst]) return 0;
+
+    cur = dst;
+    while (cur != -1 && len < WL_CELLS) {
+        tmp[len++] = cur;
+        if (cur == src) break;
+        cur = parent[cur];
+    }
+    if (cur != src) return 0;
+    for (i = 0; i < len && i < out_cap; i++)
+        out_path[i] = tmp[len - 1 - i];
+    return len;
 }
 
 /* ------------------------------------------------------------------ engine */
@@ -221,27 +201,58 @@ unsigned char wl_take_next_ball(wl_engine *e)
 }
 
 /*
- * A fresh board holds a handful of random balls, not a full one: the
- * original's new game places five (docs/11 section 5c) and then rolls the
- * next group of three.  The RNG is consumed in exactly this order by the
- * Python, C and Rust implementations, so all three stay bit-identical.
+ * Place one preview ball at a uniformly random empty cell (uniform over the
+ * empty cells, not over the 81 squares with retries).  If the placement
+ * completes a line the original clears it without scoring and immediately
+ * places another ball; the return value tells the caller to do the same.
+ */
+static int wl_spawn_one(wl_engine *e)
+{
+    int empty_count = 0, pick, nth, i, colour, total, count = 0;
+    int cells[WL_CELLS];
+
+    for (i = 0; i < WL_CELLS; i++)
+        if (e->board.cell[i] == 0) empty_count++;
+    if (empty_count == 0) return 0;
+
+    pick = (int)wl_rng_below(&e->rng, empty_count);
+    nth = 0;
+    for (i = 0; i < WL_CELLS; i++) {
+        if (e->board.cell[i] != 0) continue;
+        if (nth++ == pick) break;
+    }
+    colour = (int)wl_take_next_ball(e);
+    e->board.cell[i] = (uint8_t)colour;
+
+    total = wl_find_lines(&e->board, i, colour, e->model.threshold,
+                          cells, &count);
+    if (total == 0) return 0;
+    for (i = 0; i < count; i++)
+        e->board.cell[cells[i]] = 0;
+    return 1;
+}
+
+static void wl_spawn_until_quiet(wl_engine *e)
+{
+    int guard = 0;
+    while (wl_spawn_one(e)) {
+        if (++guard > WL_CELLS) break;
+    }
+}
+
+/*
+ * A fresh board holds the first five balls of the same random stream as the
+ * preview: roll three colours, then place five, consuming the queue head and
+ * rolling a replacement each time.  The remaining queue is the next group.
  */
 void wl_engine_new_game(wl_engine *e)
 {
-    int placed = 0;
-    int guard = 0;
+    int placed;
     memset(&e->board, 0, sizeof e->board);
     e->score = 0;
-    while (placed < e->model.initial_balls && guard < WL_CELLS * 4) {
-        int pick;
-        guard++;
-        pick = (int)wl_rng_below(&e->rng, WL_CELLS);
-        if (e->board.cell[pick] != 0)
-            continue;
-        e->board.cell[pick] = (uint8_t)wl_rng_colour(&e->rng);
-        placed++;
-    }
     wl_roll_next_group(e);
+    for (placed = 0; placed < e->model.initial_balls; placed++)
+        wl_spawn_until_quiet(e);
 }
 
 void wl_engine_move_ex(wl_engine *e, int r0, int c0, int r1, int c1,
@@ -249,13 +260,13 @@ void wl_engine_move_ex(wl_engine *e, int r0, int c0, int r1, int c1,
 {
     int src = wl_idx(r0, c0), dst = wl_idx(r1, c1);
     int colour = wl_board_get(&e->board, r0, c0);
-    int group[WL_CELLS], n, i, delta;
+    int group[WL_CELLS], total, count = 0, n, i, delta;
 
     memset(res, 0, sizeof *res);
     res->status = 0;
     if (colour == 0 || wl_board_get(&e->board, r1, c1) != 0) return;  /* illegal */
 
-    n = wl_find_path(&e->board, src, dst, &e->model, res->path, WL_CELLS * 2);
+    n = wl_find_path(&e->board, src, dst, res->path, WL_CELLS * 2);
     if (n == 0) { res->status = 1; return; }                          /* no path */
     res->path_len = n;
     res->status = 2;
@@ -264,34 +275,24 @@ void wl_engine_move_ex(wl_engine *e, int r0, int c0, int r1, int c1,
     if (!e->model.source_keeps_colour)
         wl_board_set(&e->board, r0, c0, 0);
 
-    n = wl_connected_group(&e->board, dst, colour, e->model.threshold, group);
-    if (n == 0) return;
-
-    delta = n * e->model.points_per_ball;
-    if (delta < e->model.min_score_delta) return;
-
-    for (i = 1; i < n; i++) {                 /* deterministic ordering */
-        int key = group[i], j = i - 1;
-        while (j >= 0 && group[j] > key) { group[j + 1] = group[j]; j--; }
-        group[j + 1] = key;
+    total = wl_find_lines(&e->board, dst, colour, e->model.threshold,
+                          group, &count);
+    if (total > 0) {
+        n = count;
+        for (i = 0; i < n; i++) {
+            wl_board_set(&e->board, group[i] / WL_SIDE, group[i] % WL_SIDE, 0);
+            res->group[i] = group[i];
+        }
+        res->group_len = n;
+        delta = wl_score_for_run(total);
+        e->score += delta;
+        res->delta = delta;
+        /* A clearing move does not consume the preview group. */
+        return;
     }
-    for (i = 0; i < n; i++) res->group[i] = group[i];
-    res->group_len = n;
 
-    for (i = 0; i < n; i++)
-        wl_board_set(&e->board, group[i] / WL_SIDE, group[i] % WL_SIDE, 0);
-
-    e->score += delta;
-    res->delta = delta;
-
-    for (i = 0; i < e->model.refill; i++) {
-        int pick;
-        unsigned char colour;
-        if (wl_board_full(&e->board)) break;
-        pick = (int)wl_rng_below(&e->rng, WL_CELLS);
-        colour = wl_take_next_ball(e);
-        wl_board_set(&e->board, pick / WL_SIDE, pick % WL_SIDE, colour);
-    }
+    for (i = 0; i < e->model.spawn_per_move; i++)
+        wl_spawn_until_quiet(e);
 }
 
 void wl_engine_move(wl_engine *e, int r0, int c0, int r1, int c1,

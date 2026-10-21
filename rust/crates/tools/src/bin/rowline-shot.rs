@@ -16,6 +16,7 @@
 use std::path::PathBuf;
 
 use rowline_app::game::{frame, Game};
+use rowline_assets::AssetLoader;
 use rowline_core::layout::Layout;
 use rowline_core::RuleModel;
 use rowline_render::canvas::SoftwareCanvas;
@@ -33,6 +34,8 @@ enum Scenario {
     About,
     /// The end-of-game dialog.
     GameOver,
+    /// A game in progress with the statistics window open.
+    Stats,
 }
 
 fn main() {
@@ -60,6 +63,7 @@ fn main() {
                     "scoreboard" => Scenario::Scoreboard,
                     "about" => Scenario::About,
                     "gameover" => Scenario::GameOver,
+                    "stats" => Scenario::Stats,
                     _ => Scenario::New,
                 }
             }
@@ -67,7 +71,7 @@ fn main() {
                 eprintln!(
                     "usage: rowline-shot [--out FILE] [--width N] [--height N] \
                      [--scale N] [--theme dark|light] [--scenario new|board|\
-                     scoreboard|about|gameover] [--seed N]"
+                     scoreboard|about|gameover|stats] [--seed N]"
                 );
                 return;
             }
@@ -81,6 +85,10 @@ fn main() {
     let mut game = Game::new(seed, RuleModel::default());
     if light {
         game.toggle_theme();
+    }
+    let sheet = load_sheet(scale);
+    if let Some((_image, sheet_scale)) = &sheet {
+        game.set_sheet_scale(*sheet_scale);
     }
 
     match scenario {
@@ -99,6 +107,10 @@ fn main() {
             game.engine_mut().new_game();
             game.set_game_over(true);
         }
+        Scenario::Stats => {
+            game.engine_mut().new_game();
+            game.run_command(rowline_app::commands::Command::TOGGLE_STATISTICS);
+        }
     }
 
     let layout = Layout::compute(width as i32, height as i32);
@@ -111,8 +123,8 @@ fn main() {
         scale,
     );
 
-    if let Some(sheet) = load_sheet(scale) {
-        canvas.set_sheet(sheet);
+    if let Some((image, _scale)) = sheet {
+        canvas.set_sheet(image);
     }
     if let Some(strip) = load_icons() {
         canvas.set_icons(strip);
@@ -142,20 +154,15 @@ fn main() {
 }
 
 /// The sprite sheet, at the best variant for the scale.
-fn load_sheet(scale: f32) -> Option<image::RgbaImage> {
-    let name = if scale >= 3.0 {
-        "rowline_sheet@3x.png"
-    } else if scale >= 2.0 {
-        "rowline_sheet@2x.png"
-    } else {
-        "rowline_sheet.png"
-    };
-    for dir in ["assets/sheet", "../assets/sheet", "../../assets/sheet"] {
-        let p = std::path::Path::new(dir).join(name);
-        if p.exists() {
-            if let Ok(img) = image::open(&p) {
-                return Some(img.to_rgba8());
-            }
+fn load_sheet(scale: f32) -> Option<(image::RgbaImage, u32)> {
+    for root in ["assets", "../assets", "../../assets"] {
+        let mut loader = rowline_assets::FileAssetLoader::new(root);
+        if let Ok(sheet) = loader.load_sheet(
+            &rowline_assets::AssetKey::SpriteSheet,
+            rowline_assets::GridSpec::ORIGINAL,
+            scale,
+        ) {
+            return Some((sheet.image().clone(), sheet.scale()));
         }
     }
     eprintln!("rowline-shot: the sprite sheet is missing; run 'make sheet'");
@@ -165,7 +172,7 @@ fn load_sheet(scale: f32) -> Option<image::RgbaImage> {
 /// The icon atlas.
 fn load_icons() -> Option<rowline_assets::IconStrip> {
     for dir in ["assets/icons", "../assets/icons", "../../assets/icons"] {
-        for name in ["icons@3x.png", "icons@2x.png", "icons.png"] {
+        for name in ["icons@4x.png", "icons@3x.png", "icons@2x.png", "icons.png"] {
             let p = std::path::Path::new(dir).join(name);
             if p.exists() {
                 if let Ok(strip) =

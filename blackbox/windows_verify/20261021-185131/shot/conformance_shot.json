@@ -1,32 +1,25 @@
 {
  "checks": [
   {
-   "name": "board origin X (centred hypothesis)",
+   "name": "board origin X",
    "expected": 348,
    "measured": 348,
    "ok": true,
    "note": "delta +0"
   },
   {
-   "name": "board origin Y (centred hypothesis)",
-   "expected": 268,
-   "measured": 268,
+   "name": "board origin Y",
+   "expected": 242,
+   "measured": 242,
    "ok": true,
    "note": "delta +0"
   },
   {
-   "name": "the centred hypothesis fits",
+   "name": "the layout formula fits",
    "expected": "|delta| <= 4",
    "measured": "dx +0, dy +0",
    "ok": true,
-   "note": ""
-  },
-  {
-   "name": "the legacy hypothesis fits",
-   "expected": "|delta| <= 4",
-   "measured": "dx -110, dy -233",
-   "ok": false,
-   "note": "docs/11 section 5d: the binary constant is still unidentified"
+   "note": "docs/11 section 5d: confirmed by WM_SIZE at 0x402EA7 / 0x4036E8"
   },
   {
    "name": "cell size px",

@@ -1,0 +1,10 @@
+wl-dpi-probe: display environment
+  monitor \\.\DISPLAY1                 3120x2080 px  scale 2.00  at (0, 0)
+      -> logical client area 1560 x 1040  (board needs >= 444 x 372: ok)
+  monitor \\.\DISPLAY1                 3120x2080 px  scale 2.00  at (0, 0)
+      -> logical client area 1560 x 1040  (board needs >= 444 x 372: ok)
+
+  1 monitor(s)
+   Compiling rowline-tools v0.1.0 (D:\source\09_my\Rowline\rust\crates\tools)
+    Finished `release` profile [optimized] target(s) in 2.74s
+     Running `target\release\rowline-dpi-probe.exe`

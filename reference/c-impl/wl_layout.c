@@ -3,40 +3,44 @@
 
 #include <stdlib.h>
 
-static int idiv2(int v)
+/*
+ * C integer division truncates toward zero, which is exactly what the
+ * original's `sar` sequence does for the constants involved, so the formulas
+ * below are transcribed literally.
+ */
+void wl_layout_compute_raw(wl_layout *L, int client_w, int client_h)
 {
-    return v < 0 ? -((-v + 1) / 2) : v / 2;
-}
-
-void wl_layout_compute(wl_layout *L, int client_w, int client_h)
-{
-    int top, avail, t;
+    int t;
 
     L->client_w = client_w;
     L->client_h = client_h;
     L->cell_px  = WL_CELL_PX;
 
-    /* The board frame is centred horizontally ... */
-    L->board_x = idiv2(client_w - WL_BOARD_FRAME_W);
-    /* ... and centred vertically in the area below the HUD bar. */
-    top  = WL_MENU_BAR_H + WL_HUD_H;
-    avail = client_h - top;
-    if (avail < 0) avail = 0;
-    L->board_y = top + idiv2(avail - WL_BOARD_FRAME_H);
+    /* 0x40B060: board x (the original centres a 0x148-wide span). */
+    L->board_x = (client_w - WL_BOARD_SPAN_W) / 2;
+    /* 0x40B064: board y. */
+    L->board_y = (client_h - WL_BOARD_V_BIAS) / 2 + WL_BOARD_V_OFFSET;
 
-    /* The right figure uses the original's own formula. */
-    t = idiv2(client_w - WL_BOARD_FRAME_W);
-    L->right_figure_x = t + WL_BOARD_FRAME_W + idiv2(t - WL_PANEL_HALF_BIAS);
-    L->left_figure_x  = client_w - L->right_figure_x - WL_FIGURE_W;
-    L->figure_y = L->board_y;
+    /* 0x40B088 / 0x40B098: the figures flank the board. */
+    t = L->board_x;
+    L->left_figure_x  = (t - WL_FIGURE_W) / 2;
+    L->right_figure_x = t + WL_BOARD_SPAN_W + L->left_figure_x;
+
+    /* 0x40B08C: figure base y; the portrait starts 0x86 higher. */
+    L->figure_y = (client_h - WL_FIGURE_V_BIAS) / 2 + WL_FIGURE_V_OFFSET;
 
     L->panel_x = L->right_figure_x;
-    L->panel_y = L->board_y;
+    L->panel_y = L->figure_y;
     L->panel_w = WL_PANEL_W;
-    L->panel_h = WL_BOARD_FRAME_H;
+    L->panel_h = WL_FIGURE_H;
 
+    /* 0x40B070: board area width. */
     L->board_area_w = client_w - WL_CLIENT_MARGIN;
+}
 
+void wl_layout_compute(wl_layout *L, int client_w, int client_h)
+{
+    wl_layout_compute_raw(L, client_w, client_h);
     wl_layout_clamp(L);
 }
 
@@ -51,24 +55,37 @@ void wl_layout_clamp(wl_layout *L)
     if (L->left_figure_x < 0) L->left_figure_x = 0;
     if (L->right_figure_x + WL_FIGURE_W > L->client_w)
         L->right_figure_x = L->client_w - WL_FIGURE_W > 0 ? L->client_w - WL_FIGURE_W : 0;
+    if (L->figure_y < 0) L->figure_y = 0;
 }
 
-static int layout_fits(int w, int h)
+/*
+ * Whether one axis fits, using the *unclamped* original formulas.  The other
+ * axis is given a generous default so only the tested axis can fail.
+ */
+static int layout_fits_axis(int v, int horizontal)
 {
-    wl_layout L;
-    wl_layout_compute(&L, w, h);
-    return L.board_x >= 0 && L.board_y >= 0 &&
-           L.board_x + WL_BOARD_FRAME_W <= w &&
-           L.board_y + WL_BOARD_FRAME_H <= h &&
-           L.left_figure_x >= 0 &&
-           L.right_figure_x + WL_FIGURE_W <= w;
+    int w = horizontal ? v : 8192;
+    int h = horizontal ? 8192 : v;
+    int board_x = (w - WL_BOARD_SPAN_W) / 2;
+    int board_y = (h - WL_BOARD_V_BIAS) / 2 + WL_BOARD_V_OFFSET;
+    int left    = (board_x - WL_FIGURE_W) / 2;
+    int right   = board_x + WL_BOARD_SPAN_W + left;
+    int fig_y   = (h - WL_FIGURE_V_BIAS) / 2 + WL_FIGURE_V_OFFSET;
+
+    return board_x >= 0 && board_y >= 0 &&
+           board_x + WL_BOARD_FRAME_W <= w &&
+           board_y + WL_BOARD_FRAME_H <= h &&
+           left >= 0 && left + WL_FIGURE_W <= board_x &&
+           right >= board_x + WL_BOARD_FRAME_W &&
+           right + WL_FIGURE_W <= w &&
+           fig_y >= 0;
 }
 
 void wl_layout_min_client(int *w, int *h)
 {
-    int cw = 320, ch = 240;
-    while (cw < 8192 && !layout_fits(cw, 8192)) cw += 4;
-    while (ch < 8192 && !layout_fits(8192, ch)) ch += 4;
+    int cw = 0, ch = 0;
+    while (cw < 8192 && !layout_fits_axis(cw, 1)) cw++;
+    while (ch < 8192 && !layout_fits_axis(ch, 0)) ch++;
     if (w) *w = cw;
     if (h) *h = ch;
 }

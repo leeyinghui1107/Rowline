@@ -131,6 +131,9 @@ pub struct WgpuRenderer<'w> {
     font_bind_group: Option<wgpu::BindGroup>,
     /// The sprite sheet's texture view (kept so the bind group can reference it).
     sheet_view: Option<wgpu::TextureView>,
+    /// The sprite sheet's size in texels.  Source rectangles are expressed in
+    /// texels, so they must be divided by this before sampling.
+    sheet_size: (u32, u32),
     /// The current font texture (a 1x1 white placeholder until a font is set).
     font_texture: wgpu::TextureView,
     /// The icon atlas texture (a 1x1 white placeholder until icons are set).
@@ -445,6 +448,8 @@ impl<'w> WgpuRenderer<'w> {
             shape_bind_group,
             sheet_bind_group: None,
             sheet_view: None,
+            // The fallback is the 1x1 white texture.
+            sheet_size: (1, 1),
             solid_texture,
             font: None,
             font_bytes: None,
@@ -508,6 +513,7 @@ impl<'w> WgpuRenderer<'w> {
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let sampler = white_sampler(&self.device);
         self.sheet_view = Some(view.clone());
+        self.sheet_size = (width.max(1), height.max(1));
         self.sheet_bind_group = Some(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("sheet"),
             layout: &self.bind_group_layout,
@@ -933,6 +939,22 @@ impl<'w> WgpuRenderer<'w> {
         });
     }
 
+    /// Push a flat, solid rectangle through the shape pipeline.
+    ///
+    /// Outlines and frame edges must **not** sample the sprite sheet: they
+    /// are solid colour, and the sheet may be any atlas.
+    fn push_solid(&mut self, rect: Rect, color: Color) {
+        self.push_shape(ShapeSpec {
+            rect,
+            radius: 0.0,
+            mode: 0.0,
+            kind: 0.0,
+            blur: 0.0,
+            color_a: color,
+            color_b: color,
+        });
+    }
+
     /// Push a rounded rectangle (or gradient / shadow / glow).
     ///
     /// The shape is described in its own pixel space so that the fragment
@@ -1010,33 +1032,32 @@ impl Renderer for WgpuRenderer<'_> {
                 tint,
                 ..
             } => {
+                // `src` is in texels, but `textureSample` wants 0..1.
+                let sw = self.sheet_size.0.max(1) as f32;
+                let sh = self.sheet_size.1.max(1) as f32;
                 self.push_quad(
                     dst.x,
                     dst.y,
                     size.width,
                     size.height,
-                    [src.x, src.y, src.x + src.width, src.y + src.height],
+                    [
+                        src.x / sw,
+                        src.y / sh,
+                        (src.x + src.width) / sw,
+                        (src.y + src.height) / sh,
+                    ],
                     tint,
                 );
             }
             RenderCmd::Outline { rect, color } => {
-                let uv = [0.0, 0.0, 1.0, 1.0];
-                self.push_quad(rect.x, rect.y, rect.width, 1.0, uv, color);
-                self.push_quad(
-                    rect.x,
-                    rect.y + rect.height - 1.0,
-                    rect.width,
-                    1.0,
-                    uv,
+                self.push_solid(Rect::new(rect.x, rect.y, rect.width, 1.0), color);
+                self.push_solid(
+                    Rect::new(rect.x, rect.y + rect.height - 1.0, rect.width, 1.0),
                     color,
                 );
-                self.push_quad(rect.x, rect.y, 1.0, rect.height, uv, color);
-                self.push_quad(
-                    rect.x + rect.width - 1.0,
-                    rect.y,
-                    1.0,
-                    rect.height,
-                    uv,
+                self.push_solid(Rect::new(rect.x, rect.y, 1.0, rect.height), color);
+                self.push_solid(
+                    Rect::new(rect.x + rect.width - 1.0, rect.y, 1.0, rect.height),
                     color,
                 );
             }
@@ -1046,23 +1067,14 @@ impl Renderer for WgpuRenderer<'_> {
                     FrameStyle::Raised => (Color::rgb(255, 255, 255), Color::rgb(128, 128, 128)),
                     FrameStyle::Flat => (Color::rgb(128, 128, 128), Color::rgb(128, 128, 128)),
                 };
-                let uv = [0.0, 0.0, 1.0, 1.0];
-                self.push_quad(rect.x, rect.y, rect.width, 1.0, uv, dark);
-                self.push_quad(
-                    rect.x,
-                    rect.y + rect.height - 1.0,
-                    rect.width,
-                    1.0,
-                    uv,
+                self.push_solid(Rect::new(rect.x, rect.y, rect.width, 1.0), dark);
+                self.push_solid(
+                    Rect::new(rect.x, rect.y + rect.height - 1.0, rect.width, 1.0),
                     light,
                 );
-                self.push_quad(rect.x, rect.y, 1.0, rect.height, uv, dark);
-                self.push_quad(
-                    rect.x + rect.width - 1.0,
-                    rect.y,
-                    1.0,
-                    rect.height,
-                    uv,
+                self.push_solid(Rect::new(rect.x, rect.y, 1.0, rect.height), dark);
+                self.push_solid(
+                    Rect::new(rect.x + rect.width - 1.0, rect.y, 1.0, rect.height),
                     light,
                 );
             }

@@ -240,6 +240,10 @@ pub fn default_menus() -> Vec<Menu> {
                 MenuItem::item(512, "\u{4e0b}\u{4e00}\u{7ec4}", "F3"),
                 MenuItem::item(513, "\u{663e}\u{793a}\u{7edf}\u{8ba1}", "F5"),
                 MenuItem::item(514, "\u{4f7f}\u{7528}\u{5f62}\u{72b6}", "F6"),
+                // Re-implementation extension: the original only exposes
+                // this through the `Ctrl+R` display policy, never as a menu
+                // command.  Id 515 is outside the original's nine ids.
+                MenuItem::item(515, "\u{56fa}\u{5b9a}\u{5206}\u{8fa8}\u{7387}", "Ctrl+R"),
                 MenuItem::separator(),
                 MenuItem::item(16528, "\u{5e2e}\u{52a9}", ""),
                 MenuItem::item(768, "\u{5185}\u{5bb9}", "F1"),
@@ -265,7 +269,7 @@ mod tests {
             .iter()
             .flat_map(|x| x.items.iter().filter_map(|i| i.id))
             .collect();
-        for expected in [256u16, 257, 258, 512, 513, 514, 16528, 768, 769] {
+        for expected in [256u16, 257, 258, 512, 513, 514, 515, 16528, 768, 769] {
             assert!(ids.contains(&expected), "missing command {expected}");
         }
     }

@@ -7,7 +7,7 @@ Icons follow docs/10 section 3.1:
   * 2 px strokes with round caps;
   * **single colour** -- the PNG is white with an alpha mask, so the runtime
     can tint it to any theme colour;
-  * exported at @1x / @2x / @3x;
+  * exported at @1x / @2x / @3x / @4x;
   * an SVG per icon is written next to the PNGs as the artist's source.
 
 The noise texture is a seamlessly tileable 256 x 256 grain used at a very low
@@ -423,7 +423,7 @@ if __name__ == "__main__":
     os.makedirs(NOISE_OUT, exist_ok=True)
 
     if not noise_only:
-        for scale, suffix in ((1, ""), (2, "@2x"), (3, "@3x")):
+        for scale, suffix in ((1, ""), (2, "@2x"), (3, "@3x"), (4, "@4x")):
             strip = build_strip(scale)
             strip.png(os.path.join(OUT, "icons%s.png" % suffix))
         # The artist's source: one SVG per icon plus a contact sheet.

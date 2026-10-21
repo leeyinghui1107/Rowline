@@ -12,7 +12,7 @@ use crate::board::{coords, index, Board, BOARD_CELLS, EMPTY};
 /// so the pending queue has three entries.
 pub const GROUP_SIZE: usize = 3;
 use crate::rng::Lcg;
-use crate::rules::{connected_group, find_path, RuleModel};
+use crate::rules::{find_lines, find_path, score_for_run, RuleModel};
 
 /// Outcome of a move attempt.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -47,6 +47,13 @@ pub struct Engine {
     step: u32,
     /// The balls the game is about to place, oldest first.
     next_group: [u8; GROUP_SIZE],
+    /// How many balls of each colour have been eliminated this game.
+    ///
+    /// Index `0` is unused.  The original keeps the same array at
+    /// `0x40B2C4`, resets it in `New_Game` (`0x40282F`) and adds the number
+    /// of cleared cells to the moved colour (`0x401C7A`); the statistics
+    /// window prints it as `消除-N`.
+    cleared: [u32; 8],
 }
 
 impl Engine {
@@ -60,6 +67,7 @@ impl Engine {
             model,
             step: 0,
             next_group: [0; GROUP_SIZE],
+            cleared: [0; 8],
         }
     }
 
@@ -118,6 +126,27 @@ impl Engine {
         self.next_group
     }
 
+    /// The number of balls currently on the board, per colour.
+    ///
+    /// Index `0` counts the empty cells, exactly like the statistics window
+    /// in the original (`0x404345` walks eight sprite slots, slot 0 being the
+    /// empty plate).
+    pub fn colour_counts(&self) -> [u32; 8] {
+        let mut counts = [0u32; 8];
+        for &colour in self.board.cells() {
+            counts[colour as usize] += 1;
+        }
+        counts
+    }
+
+    /// How many balls of each colour this game has eliminated.
+    ///
+    /// Index `0` is unused; the value is what the statistics window shows as
+    /// `消除-N`.
+    pub fn cleared_counts(&self) -> [u32; 8] {
+        self.cleared
+    }
+
     /// Roll a fresh next group.
     pub fn roll_next_group(&mut self) {
         for slot in self.next_group.iter_mut() {
@@ -137,27 +166,53 @@ impl Engine {
 
     /// Generate a fresh board.
     ///
-    /// The occupancy is parameterised by [`RuleModel::initial_balls`]: the
-    /// original puts **five** random balls on the empty board (docs/11
-    /// section 5c).  The Python, C and Rust implementations consume the RNG
-    /// in exactly the same order, so they stay bit-identical.
+    /// The original rolls the three-ball preview first and then places the
+    /// first five balls from that same stream: each placement consumes the
+    /// queue head and immediately rolls a replacement colour.  The remaining
+    /// queue is the next group.
     pub fn new_game(&mut self) {
         self.board = Board::new();
         self.score = 0;
-        // A fresh board holds a handful of random balls, not a full one.
-        let mut placed = 0usize;
-        let mut guard = 0usize;
-        while placed < self.model.initial_balls && guard < BOARD_CELLS * 4 {
-            guard += 1;
-            let pick = self.rng.below(BOARD_CELLS as u32) as usize;
-            if self.board.cells()[pick] != EMPTY {
-                continue;
-            }
-            let c = self.rng.colour();
-            self.board.cells_mut()[pick] = c;
-            placed += 1;
-        }
+        self.cleared = [0; 8];
         self.roll_next_group();
+        for _ in 0..self.model.initial_balls {
+            self.spawn_until_quiet();
+        }
+    }
+
+    /// Place one preview ball at a uniformly random empty cell.
+    ///
+    /// Returns `true` when the placement completed a line.  The original
+    /// clears such a line without scoring and immediately places another
+    /// ball, so the caller keeps calling until this returns `false`.
+    fn spawn_one(&mut self) -> bool {
+        let empty = self.board.empty_cells();
+        if empty.is_empty() {
+            return false;
+        }
+        let pick = empty[self.rng.below(empty.len() as u32) as usize];
+        let colour = self.take_next_ball();
+        self.board.cells_mut()[pick] = colour;
+        let (total, cells) = find_lines(&self.board, pick, colour, self.model.threshold);
+        if total == 0 {
+            return false;
+        }
+        let removed = cells.len() as u32;
+        for cell in cells {
+            self.board.cells_mut()[cell] = EMPTY;
+        }
+        self.cleared[colour as usize] += removed;
+        true
+    }
+
+    fn spawn_until_quiet(&mut self) {
+        let mut guard = 0usize;
+        while self.spawn_one() {
+            guard += 1;
+            if guard > BOARD_CELLS {
+                break;
+            }
+        }
     }
 
     /// Apply a move.
@@ -180,7 +235,7 @@ impl Engine {
 
         let src = index(r0, c0);
         let dst = index(r1, c1);
-        let path = find_path(&self.board, src, dst, &self.model);
+        let path = find_path(&self.board, src, dst);
         if path.is_empty() {
             res.status = Some(MoveStatus::NoPath);
             return res;
@@ -193,30 +248,23 @@ impl Engine {
             self.board.set(r0, c0, EMPTY);
         }
 
-        let group = connected_group(&self.board, dst, colour, self.model.threshold);
-        if group.is_empty() {
-            return res;
-        }
-        let delta = group.len() as i64 * self.model.points_per_ball;
-        if delta < self.model.min_score_delta {
-            return res;
-        }
-        for &g in &group {
-            let (r, c) = coords(g);
-            self.board.set(r, c, EMPTY);
-        }
-        self.score += delta;
-        res.group = group;
-        res.delta = delta;
-
-        for _ in 0..self.model.refill {
-            if self.board.is_full() {
-                break;
+        let (total, group) = find_lines(&self.board, dst, colour, self.model.threshold);
+        if total > 0 {
+            for &g in &group {
+                let (r, c) = coords(g);
+                self.board.set(r, c, EMPTY);
             }
-            let pick = self.rng.below(BOARD_CELLS as u32) as usize;
-            let (r, c) = coords(pick);
-            let colour = self.rng.colour();
-            self.board.set(r, c, colour);
+            self.cleared[colour as usize] += group.len() as u32;
+            let delta = score_for_run(total);
+            self.score += delta;
+            res.group = group;
+            res.delta = delta;
+            // A clearing move does not consume the preview group.
+            return res;
+        }
+
+        for _ in 0..self.model.spawn_per_move {
+            self.spawn_until_quiet();
         }
         res
     }
@@ -257,6 +305,41 @@ mod tests {
         assert_eq!(taken, before[0]);
         assert_eq!(after[0], before[1]);
         assert_eq!(after[1], before[2]);
+    }
+
+    #[test]
+    fn a_clear_counts_the_eliminated_balls_per_colour() {
+        // The statistics window shows `消除-N`; the original adds the number
+        // of removed cells to the moved colour (`0x401C7A`).
+        let mut e = Engine::new(7, RuleModel::default());
+        e.new_game();
+        {
+            let b = e.board_mut();
+            b.cells_mut().fill(EMPTY);
+            for c in 0..4 {
+                b.set(4, c, 1);
+            }
+            b.set(5, 4, 1);
+        }
+        let res = e.move_ball(5, 4, 4, 4);
+        assert_eq!(res.status, Some(MoveStatus::Moved));
+        assert_eq!(res.group.len(), 5);
+        let cleared = e.cleared_counts();
+        assert_eq!(cleared[1], 5);
+        assert_eq!(cleared[2..], [0; 6]);
+        // Everything was eliminated, so all 81 cells are empty now.
+        assert_eq!(e.colour_counts()[0], BOARD_CELLS as u32);
+    }
+
+    #[test]
+    fn a_new_game_resets_the_per_colour_statistics() {
+        let mut e = Engine::new(7, RuleModel::default());
+        e.new_game();
+        e.cleared[3] = 12;
+        e.new_game();
+        assert_eq!(e.cleared_counts()[3], 0);
+        let counts = e.colour_counts();
+        assert_eq!(counts.iter().sum::<u32>(), BOARD_CELLS as u32);
     }
 
     #[test]

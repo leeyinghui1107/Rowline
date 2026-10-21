@@ -18,6 +18,7 @@
 //!         ->  viewport (physical pixels)  ->  wgpu
 //! ```
 
+use rowline_assets::AssetLoader;
 use rowline_core::input::Size;
 use rowline_core::layout::Layout;
 use rowline_core::RuleModel;
@@ -158,11 +159,39 @@ mod gpu {
             }
         }
 
+        /// Load the sprite sheet at the best variant for the current DPR.
+        ///
+        /// The view builder multiplies its texel coordinates by the sheet's
+        /// integer scale, so the loaded scale is recorded on the game.
+        fn install_sheet(&mut self) {
+            for root in ["assets", "../assets", "../../assets"] {
+                let mut loader = rowline_assets::FileAssetLoader::new(root);
+                let sheet = loader.load_sheet(
+                    &rowline_assets::AssetKey::SpriteSheet,
+                    rowline_assets::GridSpec::ORIGINAL,
+                    self.scale,
+                );
+                match sheet {
+                    Ok(sheet) => {
+                        let image = sheet.image();
+                        if let Some(r) = self.renderer.as_mut() {
+                            r.set_sheet(image.as_raw(), image.width(), image.height());
+                        }
+                        self.game.set_sheet_scale(sheet.scale());
+                        return;
+                    }
+                    Err(_) => continue,
+                }
+            }
+            eprintln!("rowline: the sprite sheet is missing; run 'make sheet'");
+        }
+
         /// Load the icon atlas.
         fn install_icons(&mut self) {
             // The highest variant that exists wins; the atlas is a strip of
             // square cells and is sampled 1:1 at the device resolution.
             let candidates = [
+                "assets/icons/icons@4x.png",
                 "assets/icons/icons@3x.png",
                 "assets/icons/icons@2x.png",
                 "assets/icons/icons.png",
@@ -279,6 +308,7 @@ mod gpu {
             self.window = Some(window);
             self.install_font();
             self.install_icons();
+            self.install_sheet();
             self.sync_viewport();
         }
 
@@ -334,6 +364,8 @@ mod gpu {
                     if let Some(r) = self.renderer.as_mut() {
                         r.set_font_dpr(self.scale);
                     }
+                    // A new DPR may need a higher-resolution sheet variant.
+                    self.install_sheet();
                     self.game.handle_event(
                         &rowline_core::input::InputEvent::ScaleFactorChanged {
                             scale: scale_factor as f32,
@@ -403,7 +435,6 @@ mod gpu {
                             rowline_core::input::Key::KeyE => self.game.cycle_text_scale(),
                             rowline_core::input::Key::KeyR => {
                                 self.game.toggle_retro_mode();
-                                self.sync_viewport();
                             }
                             _ => {}
                         }
@@ -429,6 +460,10 @@ mod gpu {
             let dt = ((now - self.last_tick) as f32 / 1000.0).min(0.1);
             self.last_tick = now;
             self.game.tick(dt);
+            // A menu command (固定分辨率) may have changed the display policy.
+            if self.game.take_viewport_dirty() {
+                self.sync_viewport();
+            }
             let layout = self.layout();
             if let Some(r) = self.renderer.as_mut() {
                 r.begin(self.physical, self.scale);

@@ -1,0 +1,5 @@
+# quiet moves: spawn three preview balls per turn
+seed 4660
+board 1................................................................................
+op move 0 0 0 1
+op move 0 1 0 2

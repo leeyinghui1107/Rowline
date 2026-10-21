@@ -27,8 +27,8 @@ pub trait WindowBackend {
     fn scale_factor(&self) -> f32;
     /// Ask the window to close.
     fn request_quit(&mut self);
-    /// Enforce a minimum client size (the layout needs >= 880x892, see
-    /// `docs/03` section 3 and `docs/04` decision D3).
+    /// Enforce a minimum client size (the layout needs >= 444x372 before any
+    /// clamping, see `docs/03` section 3 and `docs/04` decision D3).
     fn set_min_size(&mut self, size: Size);
     /// Set the window title.
     fn set_title(&mut self, title: &str);

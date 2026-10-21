@@ -24,14 +24,18 @@ fn describe(el: &ActiveEventLoop, m: &MonitorHandle) {
         "  monitor {:<28} {}x{} px  scale {:.2}  at ({}, {})",
         name, size.width, size.height, scale, pos.x, pos.y
     );
-    // The viewport the game would use at that scale.
+    // The viewport the game would use at that scale.  The board needs at
+    // least 444x372 logical pixels before any clamping kicks in.
+    let (need_w, need_h) = rowline_core::layout::min_client_size();
     let logical_w = size.width as f32 / scale;
     let logical_h = size.height as f32 / scale;
     println!(
-        "      -> logical client area {:.0} x {:.0}  (board needs >= 880 x 892: {})",
+        "      -> logical client area {:.0} x {:.0}  (board needs >= {} x {}: {})",
         logical_w,
         logical_h,
-        if logical_w >= 880.0 && logical_h >= 892.0 {
+        need_w,
+        need_h,
+        if logical_w >= need_w as f32 && logical_h >= need_h as f32 {
             "ok"
         } else {
             "TOO SMALL"

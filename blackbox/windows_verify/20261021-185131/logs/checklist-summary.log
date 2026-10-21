@@ -1,0 +1,9 @@
+group      todo  doing  blocked   done   failed    total
+UI            2      0        0     10        0       12
+按键            6      0        0      4        0       10
+数值            0      0        0     11        0       11
+菜单            2      0        0      4        0        6
+规则            2      0        0     13        0       15
+TOTAL        12      0        0     42        0       54
+
+progress: 42/54 (78%)

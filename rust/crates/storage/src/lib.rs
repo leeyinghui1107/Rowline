@@ -148,8 +148,10 @@ mod tests {
     #[test]
     fn ron_round_trips() {
         let f = RonFormat;
-        let mut data = SaveData::default();
-        data.version = 1;
+        let mut data = SaveData {
+            version: 1,
+            ..SaveData::default()
+        };
         data.scores.push(ScoreRecord {
             name: "ACE".into(),
             score: 1234,

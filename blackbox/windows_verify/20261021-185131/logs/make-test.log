@@ -1,21 +1,27 @@
 build/rowline-layout-check.exe
 === M1 layout acceptance (C reference) ===
-minimum client size that fits every region: 328x328
+minimum client size that fits every region: 444x372
+  OK   minimum is the smallest size that fits (got 444x372)
+  OK   live 604x371 board origin is (138, 44) (got 138, 44)
+  OK   live 604x371 figures are at 40 / 506
+  OK   live 604x371 figure y is 168
 
 --- 640x480 (at/above minimum) ---
 
 client 640x480
-  board origin  = (156, 124)   frame = 327x328
-  left figure   = 50
-  right figure  = 532
+  board origin  = (156, 98)   frame = 327x328
+  left figure   = 49
+  right figure  = 533
   OK   board origin inside the client rect
   OK   board frame fits horizontally (156 + 327 <= 640)
-  OK   board frame fits vertically (124 + 328 <= 480)
+  OK   board frame fits vertically (98 + 328 <= 480)
   OK   the left figure fits
   OK   the right figure fits
   OK   the left figure does not overlap the board
   OK   the right figure does not overlap the board
   OK   cell size is 36 px
+  OK   board origin matches the original's formula
+  OK   figure y matches the original's formula (223)
   OK   the board is centred horizontally (delta 1)
   OK   all 81 cells map to distinct in-bounds rects and round-trip
   OK   a point outside the board is rejected
@@ -23,17 +29,19 @@ client 640x480
 --- 800x600 (at/above minimum) ---
 
 client 800x600
-  board origin  = (236, 184)   frame = 327x328
-  left figure   = 90
-  right figure  = 652
+  board origin  = (236, 158)   frame = 327x328
+  left figure   = 89
+  right figure  = 653
   OK   board origin inside the client rect
   OK   board frame fits horizontally (236 + 327 <= 800)
-  OK   board frame fits vertically (184 + 328 <= 600)
+  OK   board frame fits vertically (158 + 328 <= 600)
   OK   the left figure fits
   OK   the right figure fits
   OK   the left figure does not overlap the board
   OK   the right figure does not overlap the board
   OK   cell size is 36 px
+  OK   board origin matches the original's formula
+  OK   figure y matches the original's formula (283)
   OK   the board is centred horizontally (delta 1)
   OK   all 81 cells map to distinct in-bounds rects and round-trip
   OK   a point outside the board is rejected
@@ -41,17 +49,19 @@ client 800x600
 --- 1024x768 (at/above minimum) ---
 
 client 1024x768
-  board origin  = (348, 268)   frame = 327x328
-  left figure   = 146
-  right figure  = 820
+  board origin  = (348, 242)   frame = 327x328
+  left figure   = 145
+  right figure  = 821
   OK   board origin inside the client rect
   OK   board frame fits horizontally (348 + 327 <= 1024)
-  OK   board frame fits vertically (268 + 328 <= 768)
+  OK   board frame fits vertically (242 + 328 <= 768)
   OK   the left figure fits
   OK   the right figure fits
   OK   the left figure does not overlap the board
   OK   the right figure does not overlap the board
   OK   cell size is 36 px
+  OK   board origin matches the original's formula
+  OK   figure y matches the original's formula (367)
   OK   the board is centred horizontally (delta 1)
   OK   all 81 cells map to distinct in-bounds rects and round-trip
   OK   a point outside the board is rejected
@@ -59,17 +69,19 @@ client 1024x768
 --- 1280x800 (at/above minimum) ---
 
 client 1280x800
-  board origin  = (476, 284)   frame = 327x328
-  left figure   = 210
-  right figure  = 1012
+  board origin  = (476, 258)   frame = 327x328
+  left figure   = 209
+  right figure  = 1013
   OK   board origin inside the client rect
   OK   board frame fits horizontally (476 + 327 <= 1280)
-  OK   board frame fits vertically (284 + 328 <= 800)
+  OK   board frame fits vertically (258 + 328 <= 800)
   OK   the left figure fits
   OK   the right figure fits
   OK   the left figure does not overlap the board
   OK   the right figure does not overlap the board
   OK   cell size is 36 px
+  OK   board origin matches the original's formula
+  OK   figure y matches the original's formula (383)
   OK   the board is centred horizontally (delta 1)
   OK   all 81 cells map to distinct in-bounds rects and round-trip
   OK   a point outside the board is rejected
@@ -77,17 +89,19 @@ client 1280x800
 --- 1440x900 (at/above minimum) ---
 
 client 1440x900
-  board origin  = (556, 334)   frame = 327x328
-  left figure   = 250
-  right figure  = 1132
+  board origin  = (556, 308)   frame = 327x328
+  left figure   = 249
+  right figure  = 1133
   OK   board origin inside the client rect
   OK   board frame fits horizontally (556 + 327 <= 1440)
-  OK   board frame fits vertically (334 + 328 <= 900)
+  OK   board frame fits vertically (308 + 328 <= 900)
   OK   the left figure fits
   OK   the right figure fits
   OK   the left figure does not overlap the board
   OK   the right figure does not overlap the board
   OK   cell size is 36 px
+  OK   board origin matches the original's formula
+  OK   figure y matches the original's formula (433)
   OK   the board is centred horizontally (delta 1)
   OK   all 81 cells map to distinct in-bounds rects and round-trip
   OK   a point outside the board is rejected
@@ -95,17 +109,19 @@ client 1440x900
 --- 1920x1080 (at/above minimum) ---
 
 client 1920x1080
-  board origin  = (796, 424)   frame = 327x328
-  left figure   = 370
-  right figure  = 1492
+  board origin  = (796, 398)   frame = 327x328
+  left figure   = 369
+  right figure  = 1493
   OK   board origin inside the client rect
   OK   board frame fits horizontally (796 + 327 <= 1920)
-  OK   board frame fits vertically (424 + 328 <= 1080)
+  OK   board frame fits vertically (398 + 328 <= 1080)
   OK   the left figure fits
   OK   the right figure fits
   OK   the left figure does not overlap the board
   OK   the right figure does not overlap the board
   OK   cell size is 36 px
+  OK   board origin matches the original's formula
+  OK   figure y matches the original's formula (523)
   OK   the board is centred horizontally (delta 1)
   OK   all 81 cells map to distinct in-bounds rects and round-trip
   OK   a point outside the board is rejected
@@ -125,7 +141,19 @@ PASSED (0 failure(s))
   OK   c-implementation     matches python-reference
   OK   rust-implementation  matches python-reference
   OK   golden               matches python-reference
+=== tools\replay\cases\clear5_006.trace
+  OK   c-implementation     matches python-reference
+  OK   rust-implementation  matches python-reference
+  OK   golden               matches python-reference
+=== tools\replay\cases\clear6_007.trace
+  OK   c-implementation     matches python-reference
+  OK   rust-implementation  matches python-reference
+  OK   golden               matches python-reference
 === tools\replay\cases\edge_005.trace
+  OK   c-implementation     matches python-reference
+  OK   rust-implementation  matches python-reference
+  OK   golden               matches python-reference
+=== tools\replay\cases\quiet_008.trace
   OK   c-implementation     matches python-reference
   OK   rust-implementation  matches python-reference
   OK   golden               matches python-reference

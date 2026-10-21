@@ -1,0 +1,5 @@
+wrote D:\source\09_my\Rowline\blackbox\windows_verify\20261021-185131\mock_1024x768.png (1024x768)
+  expected board origin : (348, 242)
+  expected panel origin : (821, 242)
+  board seed             : 2 1 5 5 5 1 1 5 7 2 5 0 4 2 7 4 1 5 0 5 2 5 5 2 5 3 4 2 0 2 3 3 3 1 4 3 4 6 5 7 6 4 4 1 0 6 6 6 6 0 4 0 4 5 1 3 2 7 2 5 2 0 0 4 0 4 0 2 6 4 0 3 4 5 2 5 0 6 7 0 0
+  wrote mock config      : D:\source\09_my\Rowline\blackbox\windows_verify\20261021-185131\config.json

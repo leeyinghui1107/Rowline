@@ -22,7 +22,7 @@
 | **[docs/10_VISUAL_DESIGN.md](docs/10_VISUAL_DESIGN.md)** | **视觉设计规范**：深/浅色板、8pt 栅格、字阶、缓动与减少动效、资产规范、SDF 落地、无障碍 |
 | **[docs/11_SCREENSHOT_OBSERVATIONS.md](docs/11_SCREENSHOT_OBSERVATIONS.md)** | **原版实机截图观察**：从截图直接读到的事实（下一组 = 3 颗球、HUD 顶部横栏、黑底棋盘、游戏结束对话框）与实现修改清单 |
 | **[tools/blackbox/README.md](tools/blackbox/README.md)** | **黑盒采集操作手册**：Windows VM 上的完整执行流程 |
-| **[docs/temp/WINDOWS_DEV_CHECKLIST.md](docs/temp/WINDOWS_DEV_CHECKLIST.md)** | **Windows 开发机工作清单**：待确认的问题（规则/AI 对手/几何/输入/数值）、环境与坑、执行顺序、每项确认后的固定动作；**工具链自检已完成 9/9**，黑盒采集待原作 |
+| **[docs/temp/WINDOWS_DEV_CHECKLIST.md](docs/temp/WINDOWS_DEV_CHECKLIST.md)** | **Windows 开发机工作清单**：规则/几何/输入/数值的确认记录、环境与坑、执行顺序；**工具链自检 9/9**，黑盒项已按反汇编 + 实机回填 |
 
 ## 工程结构
 
@@ -44,8 +44,8 @@
 │   └── crates/tools/          CLI
 ├── tools/                    静态分析 · 黑盒采集 · 资产生成 · 打包
 ├── assets/
-│   ├── sheet/                自制精灵图集 @1x/@2x/@3x
-│   ├── icons/                自制图标 @1x/@2x/@3x + SVG 源
+│   ├── sheet/                自制精灵图集 @1x/@2x/@3x/@4x
+│   ├── icons/                自制图标 @1x/@2x/@3x/@4x + SVG 源
 │   ├── noise/                自制噪点纹理
 │   ├── png/ resources/       ⚠️ 从原作 EXE 提取的受版权保护资产，已 .gitignore 隔离
 ├── analysis/                 静态分析产物
@@ -104,10 +104,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\win\verify.ps1
 - 棋盘（已确认）：**9×9 = 81 格**，行主序字节数组，格字节低 6 位有效，**7 色**，**消除阈值 = 5**
 - 新局（已由截图确认）：空棋盘上**随机放 5 颗球**，并预告**下一组 3 颗**
 - 精灵取样（已确认）：图集 576×586、36 px 网格，源 Y=225，源 X = 格值×36 + 精灵集×288
-- 布局（已按截图校正）：棋盘**水平居中**、**垂直居中于 HUD 之下**；右角色 X 用二进制原公式；
-  最小客户区 880×892（`[0x40B078]=(W−108)/2` 的确切用途仍未识别，见 `docs/11` §5d）
+- 布局（反汇编 + 实机 604×371 确认）：棋盘 `x=(W−328)/2`、`y=(H−376)/2+46`，外框 327×328；
+  左右角色 `((W−328)/2−58)/2` / `t+328+((t−58)/2)`；最小客户区 444×372
+  （`[0x40B078]=(W−108)/2` 是**预览球组**的 X，见 `docs/11` §5d）
 - 菜单（已精确解析 276/276 字节 + 加速键交叉校验）：**简体中文**，`文件(&F)` / `选项(&O)`
 - 命令 ID：256 新建(F4) / 257 高分榜 / 258 退出(Alt+F9) / 512 下一组(F3→ShowNext) / 513 显示统计(F5) / 514 使用形状(F6→UseFigures) / 768 内容(F1) / 769 关于
+- 统计窗口（已由实机确认）：独立非模态窗口，8 行（空格子 + 7 色），
+  `数量 (百分比%)`，球色行追加 `,消除-N`；百分比 = `数量×100/81`（向下取整），
+  `N` 为本局该颜色累计消除数（`0x401C7A`），默认关闭
+- 重设计扩展：`选项 · 固定分辨率`（id 515，等价于 `Ctrl+R`）；原作没有这个菜单项
 - 高分榜（已确认）：注册表 `HKCU\...\HighScore`，`Table`=512 B（16×32 B，姓名+28 B / 分数+0x1C），`Hash`=16 B
 - 随机源（已确认）：Borland LCG `state*0x41C64E6D+0x3039`，以 `GetTickCount()` 播种
 - **无音频**；`winlines.res`/`lines.res` 为**死字符串**（全文件零引用）

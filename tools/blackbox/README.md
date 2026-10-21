@@ -73,7 +73,7 @@ python tools\blackbox\analyze.py probe C:\bb\run1 --out C:\bb\run1
 
 ### 2.1 采集
 
-1. 把窗口调整到目标客户区尺寸（**宽度与高度都 ≥ 880×892**，否则原版公式会溢出，见 `docs/04` D3）
+1. 把窗口调整到目标客户区尺寸（**宽度与高度都 ≥ 444×372**，否则原版公式会溢出，见 `docs/04` D3）
 2. 用系统截图或 OBS 截取**客户区**（不要含标题栏）
 3. 存为 `C:\bb\shots\board_1280x960.png`
 
@@ -91,11 +91,11 @@ python tools\blackbox\analyze.py shot C:\bb\shots\board_1280x960.png ^
 
 | 检查项 | 期望（来自规格） |
 |---|---|
-| board origin X | `(clientW − 108) / 2` |
-| board origin Y | `(clientH − 234) / 2 + 234` |
+| board origin X | `(clientW − 328) / 2` |
+| board origin Y | `(clientH − 376) / 2 + 46` |
 | 格边长 | 36 px |
 | 网格边长 | 9 × 9 |
-| 棋盘边框 | 327 × 328 px |
+| 棋盘边框 | 327 × 328 px（居中跨距 328） |
 | 网格覆盖率 | ≥ 0.95（所有精灵都落在 9×9 网格内） |
 
 > **测量原理**：先检测棋盘外框（长水平灰线）得到绝对原点，再用"饱和像素落在 9×9 槽位内"验证。
@@ -106,7 +106,7 @@ python tools\blackbox\analyze.py shot C:\bb\shots\board_1280x960.png ^
 ### 2.3 多尺寸扫描（BB-U03）
 
 ```bat
-for %%S in (880x892 1024x900 1280x960 1440x900 1920x1080) do (
+for %%S in (444x372 640x480 1024x768 1280x960 1440x900 1920x1080) do (
     python tools\blackbox\simulate.py --out C:\bb\shots\mock_%%S.png --size %%S --seed 1
 )
 REM 真实测量：把窗口调到各尺寸后逐个截图，再对每个跑 geometry.py
@@ -204,18 +204,16 @@ python tools\blackbox\checklist.py export > blackbox/progress.md
 
 ## 6. 回填规则模型（把黑盒结论写进代码）
 
-黑盒测出的语义要写进**两处**（Python 参考实现 + C 实现），然后跑差分门：
+规则语义已全部定标。改规则时要同时改**三处**（Python 参考实现 + C 实现 + Rust 实现），
+然后跑差分门：
 
-| 开关 | 文件 | 黑盒用例 |
+| 参数 | 文件 | 定标依据 |
 |---|---|---|
-| `threshold` | `tools/replay/model.py` → `RuleModel.threshold`；`src/wl_model.h` → `wl_rule_model.threshold` | BB-G03 |
-| `source_keeps_colour` | 同上 | BB-G03 |
-| `max_turns` | 同上 | BB-G04 |
-| `refill` | 同上 | BB-G02 / BB-G06 |
-| `points_per_ball` | 同上 | BB-G11 |
-| `min_score_delta` | 同上 | BB-G11 |
-| `allow_revisit_source` | 同上 | BB-G05 |
-| `initial_balls` | 同上 | BB-G01 |
+| `threshold = 5` | `tools/replay/model.py` / `reference/c-impl/wl_model.h` / `rust/crates/core/src/rules.rs` | `0x401AF8`（BB-G03 / N05） |
+| `spawn_per_move = 3`（仅未消线回合） | 同上 | `0x401CD4`（BB-G02 / G06 / N04） |
+| `initial_balls = 5` | 同上 | `0x402801`（BB-G01 / N03） |
+| `source_keeps_colour = false` | 同上 | 移动后源格清空（BB-G05） |
+| 清除形状 / 分值表 / 结束条件 | `rules.rs`、`engine.rs` 中的固定逻辑 | `0x401BD4` / `0x401E1D` / `0x401CA1` |
 
 ```bat
 REM 改完两处后

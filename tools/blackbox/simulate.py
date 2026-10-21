@@ -27,29 +27,21 @@ BG = (192, 192, 192)
 
 
 def idiv2(v):
-    return -((-v + 1)//2) if v < 0 else v//2
+    """C integer division by two (truncation toward zero)."""
+    return -((-v) // 2) if v < 0 else v // 2
 
 
-def layout(client_w, client_h, model="legacy"):
-    """The board origin under either layout hypothesis.
+def layout(client_w, client_h):
+    """The confirmed board origin (docs/11 section 5d).
 
-    "legacy"  -- the binary's constants: X = (W - 0x6C) / 2,
-                  Y = (H - 0xEA) / 2 + 0xEA.
-    "centred" -- what the screenshots show: the board frame is centred
-                  horizontally and centred below the HUD bar.
-
-    The two are far enough apart that a 100%-scale screenshot settles the
-    question at a glance (docs/11 section 5d).
+    X = (W - 0x148) / 2, Y = (H - 0x178) / 2 + 0x2E, and the right figure
+    sits at t + 0x148 + (t - 0x3A) / 2.  A live 604x371 client gives
+    (138, 44).
     """
     t = idiv2(client_w - 328)
-    half = idiv2(t - 58)
-    panel_x = t + 328 + half
-    if model == "centred":
-        top = 96
-        return idiv2(client_w - 327), top + idiv2(client_h - top - 328), panel_x
-    board_x = idiv2(client_w - 108)
-    board_y = idiv2(client_h - 234) + 234
-    return board_x, board_y, panel_x
+    panel_x = t + 328 + idiv2(t - 58)
+    board_y = idiv2(client_h - 376) + 46
+    return t, board_y, panel_x
 
 
 def load_sheet(path):
@@ -72,7 +64,7 @@ def blit(dst, dw, sx, sy, sw, sh, dx, dy):
             drow[px*3:px*3 + 3] = srow[o:o+3]
 
 
-def render(sheet_path, client_w, client_h, seed, set_mode=0, fill=0.75, model="legacy"):
+def render(sheet_path, client_w, client_h, seed, set_mode=0, fill=0.75):
     global rows_src
     sw, sh, rows_src = load_sheet(sheet_path)
 
@@ -83,8 +75,8 @@ def render(sheet_path, client_w, client_h, seed, set_mode=0, fill=0.75, model="l
     for i in range(SIDE*SIDE):
         board.append(rng.randint(1, 7) if rng.random() < fill else 0)
 
-    bx, by, px = layout(client_w, client_h, model)
-    # board frame (simple sunken look)
+    bx, by, px = layout(client_w, client_h)
+    # board frame (simple sunken look): 327 wide by 328 tall
     for y in range(by, min(client_h, by + 328)):
         for x in range(bx, min(client_w, bx + 327)):
             edge = (x in (bx, bx+326)) or (y in (by, by+327))
@@ -153,12 +145,10 @@ if __name__ == "__main__":
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--set", type=int, default=0, choices=(0, 1))
     ap.add_argument("--config", help="also write a mock winprobe config.json here")
-    ap.add_argument("--layout", default="legacy", choices=("legacy", "centred"),
-                    help="which layout hypothesis to draw (see docs/11 section 5d)")
     a = ap.parse_args()
 
     cw, ch = (int(v) for v in a.size.lower().split("x"))
-    img, board, geo = render(a.sheet, cw, ch, a.seed, a.set, model=a.layout)
+    img, board, geo = render(a.sheet, cw, ch, a.seed, a.set)
     pngio.write_png(a.out, cw, ch, img)
     bx, by, px = geo
     print("wrote %s (%dx%d)" % (a.out, cw, ch))

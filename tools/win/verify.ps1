@@ -303,30 +303,29 @@ $ok = $wpOk -and $ok
 # simulate.py draws a mock screenshot from the re-drawn sheet, analyze.py
 # measures it.  This catches geometry/pngio/UTF-8 regressions on Windows.
 Write-Step 'black-box pipeline (simulate -> analyze shot)'
-$mock = Join-Path $OutDir 'mock_centred.png'
+$mock = Join-Path $OutDir 'mock_1024x768.png'
 $shotDir = Join-Path $OutDir 'shot'
 $simLog = Join-Path $LogDir 'simulate.log'
 $analyzeLog = Join-Path $LogDir 'analyze-shot.log'
 $simArgs = @('tools/blackbox/simulate.py',
              '--sheet', 'assets/sheet/rowline_sheet.png',
              '--out', $mock, '--size', '1024x768', '--seed', '7',
-             '--layout', 'centred',
              '--config', (Join-Path $OutDir 'config.json'))
 $simCode = Invoke-Native -Exe $PythonExe -Arguments $simArgs -Log $simLog
 $anArgs = @('tools/blackbox/analyze.py', 'shot', $mock, '--out', $shotDir)
 $anCode = Invoke-Native -Exe $PythonExe -Arguments $anArgs -Log $analyzeLog
-$centredOk = $false
+$layoutOk = $false
 $detail = "simulate exit=$simCode, analyze exit=$anCode"
 $shotJson = Join-Path $shotDir 'conformance_shot.json'
 if ((Test-Path $shotJson) -and $anCode -eq 0) {
     $report = Get-Content $shotJson -Raw -Encoding UTF8 | ConvertFrom-Json
-    $centred = $report.checks | Where-Object { $_.name -eq 'the centred hypothesis fits' }
+    $layout = $report.checks | Where-Object { $_.name -eq 'the layout formula fits' }
     $colours = $report.checks | Where-Object { $_.name -eq 'distinct colours observed' }
-    $centredOk = [bool]$centred.ok -and [bool]$colours.ok
-    $detail = "centred delta=$($centred.measured); colours=$($colours.measured)"
+    $layoutOk = [bool]$layout.ok -and [bool]$colours.ok
+    $detail = "layout delta=$($layout.measured); colours=$($colours.measured)"
 }
-Add-Result 'black-box simulator matches the centred layout' $centredOk $detail $analyzeLog
-$ok = $centredOk -and $ok
+Add-Result 'black-box simulator matches the confirmed layout' $layoutOk $detail $analyzeLog
+$ok = $layoutOk -and $ok
 
 # The 54-item checklist must load as UTF-8 and stay self-consistent.
 Write-Step 'black-box checklist (summary + consistency)'

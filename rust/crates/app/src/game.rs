@@ -34,10 +34,17 @@ pub struct Game {
     pub help_open: bool,
     /// `true` when no move is left and the game is over.
     pub game_over: bool,
+    /// `true` once the end-of-game message has been acknowledged.
+    pub game_over_ack: bool,
     /// The overlay the user is interacting with.
     pub overlay: Overlay,
     /// The name being typed in the name-entry dialog.
     pub name_input: String,
+    /// `true` when the viewport must be recomputed (the display policy
+    /// changed).  Cleared by [`Game::take_viewport_dirty`].
+    viewport_dirty: bool,
+    /// The integer scale of the sprite sheet the renderer loaded.
+    sheet_scale: u32,
 }
 
 /// The modal overlays the game can show.
@@ -71,9 +78,25 @@ impl Game {
             effects: rowline_core::effects::EffectSystem::new(0x5EED),
             help_open: false,
             game_over: false,
+            game_over_ack: true,
             overlay: Overlay::None,
             name_input: rowline_core::scoreboard::default_player_name().to_string(),
+            viewport_dirty: false,
+            sheet_scale: 1,
         }
+    }
+
+    /// Record the integer scale of the loaded sprite sheet.
+    ///
+    /// The renderer samples the sheet with texel coordinates, so the view
+    /// builder must multiply the source rectangles by this scale.
+    pub fn set_sheet_scale(&mut self, scale: u32) {
+        self.sheet_scale = scale.max(1);
+    }
+
+    /// The integer scale of the loaded sprite sheet.
+    pub fn sheet_scale(&self) -> u32 {
+        self.sheet_scale
     }
 
     /// The best score in the table.
@@ -225,6 +248,12 @@ impl Game {
     /// Toggle the fixed-resolution ("retro") scaling policy.
     pub fn toggle_retro_mode(&mut self) {
         self.settings.retro_mode = !self.settings.retro_mode;
+        self.viewport_dirty = true;
+    }
+
+    /// `true` once after the display policy changed, then clears the flag.
+    pub fn take_viewport_dirty(&mut self) -> bool {
+        std::mem::take(&mut self.viewport_dirty)
     }
 
     /// Apply the persisted settings to the design system.
@@ -240,6 +269,7 @@ impl Game {
         let idx = (self.settings.text_scale as usize).min(scales.len() - 1);
         self.design.set_text_scale(scales[idx]);
         self.engine.set_use_figures(self.settings.use_figures);
+        self.viewport_dirty = true;
     }
 
     /// Copy the live design state back into the settings.
@@ -289,13 +319,30 @@ impl Game {
             show_statistics: self.settings.show_statistics,
             use_figures: self.engine.use_figures(),
             next_group: self.engine.next_group(),
-            sheet_scale: 1,
+            sheet_scale: self.sheet_scale,
             layout,
         }
     }
 
     /// Handle one input event.
     pub fn handle_event(&mut self, ev: &InputEvent, layout: Layout) {
+        // The end-of-game message is modal: it must be acknowledged before
+        // anything else happens.  The original then offers the name entry
+        // (and the leaderboard), exactly once.
+        if self.game_over && !self.game_over_ack {
+            let acknowledge = matches!(ev, InputEvent::KeyPressed { .. })
+                || matches!(
+                    ev,
+                    InputEvent::MousePressed {
+                        button: MouseButton::Left,
+                        ..
+                    }
+                );
+            if acknowledge {
+                self.ack_game_over();
+                return;
+            }
+        }
         match ev {
             InputEvent::KeyPressed { key, .. } => {
                 // The name entry captures the typing.
@@ -336,6 +383,9 @@ impl Game {
                 self.selected = None;
                 self.path.clear();
                 self.phase = Phase::Ready;
+                self.game_over = false;
+                self.game_over_ack = true;
+                self.overlay = Overlay::None;
             }
             Command::TOGGLE_NEXT_SET => {
                 self.settings.show_next = !self.settings.show_next;
@@ -348,6 +398,7 @@ impl Game {
                 self.engine.set_use_figures(next);
                 self.settings.use_figures = next;
             }
+            Command::TOGGLE_FIXED_SCALE => self.toggle_retro_mode(),
             Command::EXIT => self.quit = true,
             Command::SHOW_HIGH_SCORES => {
                 self.overlay = Overlay::Scoreboard;
@@ -529,9 +580,11 @@ impl Game {
                         } else {
                             Phase::Animating
                         };
-                        self.game_over = !self.engine.has_legal_move();
+                        if !self.engine.has_legal_move() {
+                            self.game_over = true;
+                            self.game_over_ack = false;
+                        }
                         if !res.group.is_empty() {
-                            self.score_changed(res.delta);
                             for cell in &res.group {
                                 let (gr, gc) = rowline_core::coords(*cell);
                                 self.burst_at(gr, gc, layout);
@@ -547,13 +600,30 @@ impl Game {
         }
     }
 
-    /// Called when the player beats the best score: ask for a name.
+    /// Acknowledge the end-of-game message.
+    ///
+    /// This mirrors `0x4032E2`: the original shows `游戏结束!`, and when the
+    /// player dismisses it, `0x402CB1` inserts the score.  If the score makes
+    /// the table, the name entry opens; the leaderboard follows on accept.
+    pub fn ack_game_over(&mut self) {
+        self.game_over_ack = true;
+        let score = self.engine().score() as u32;
+        let sb = rowline_core::scoreboard::Scoreboard::new(self.scores().to_vec());
+        if sb.qualifies(score) {
+            self.offer_name_entry();
+        }
+    }
+
+    /// Called when the player makes the table: ask for a name.
     pub fn offer_name_entry(&mut self) {
         self.overlay = Overlay::NameEntry;
         self.name_input = rowline_core::scoreboard::default_player_name().to_string();
     }
 
-    /// Accept the typed name and record it.
+    /// Accept the typed name and record it, then show the leaderboard.
+    ///
+    /// The original writes the row and then shows the table (`0x402D4A`),
+    /// which is why accepting a name lands on the leaderboard.
     pub fn accept_name(&mut self) {
         let name = self.name_input.trim().to_string();
         let name = if name.is_empty() {
@@ -566,9 +636,9 @@ impl Game {
         if score > 0 {
             self.scores.push(ScoreRecord { name, score });
             self.scores.sort_by_key(|r| std::cmp::Reverse(r.score));
-            self.scores.truncate(16);
+            self.scores.truncate(rowline_core::scoreboard::ROWS);
         }
-        self.overlay = Overlay::None;
+        self.overlay = Overlay::Scoreboard;
     }
 
     /// Dismiss the current overlay.
@@ -582,20 +652,7 @@ impl Game {
     /// screenshot tool uses it to render the dialog.
     pub fn set_game_over(&mut self, over: bool) {
         self.game_over = over;
-    }
-
-    fn score_changed(&mut self, delta: i64) {
-        if delta <= 0 {
-            return;
-        }
-        // A new best score asks for a name, like the original does.  The
-        // score itself is only written to the table when the name is
-        // accepted -- the original never fills the table with duplicates.
-        let sb = rowline_core::scoreboard::Scoreboard::new(self.scores().to_vec());
-        let score = self.engine().score() as u32;
-        if sb.qualifies(rowline_core::scoreboard::default_player_name(), score) {
-            self.offer_name_entry();
-        }
+        self.game_over_ack = !over;
     }
 }
 
@@ -614,6 +671,11 @@ pub fn frame(game: &Game, layout: Layout) -> Vec<RenderCmd> {
     cmds.extend(figure_commands(game, layout));
 
     cmds.extend(menu_commands(game, layout));
+
+    // ---- the statistics window (非模态, doc/11 section 5e) --------------
+    if game.settings.show_statistics {
+        cmds.extend(stats_panel(game, layout));
+    }
 
     // ---- the decorative particles ---------------------------------------
     for p in game.effects.particles() {
@@ -636,7 +698,7 @@ pub fn frame(game: &Game, layout: Layout) -> Vec<RenderCmd> {
     }
 
     // ---- the end-of-game dialog ----------------------------------------
-    if game.game_over {
+    if game.game_over && !game.game_over_ack {
         cmds.extend(game_over_dialog(game, layout));
     }
 
@@ -758,10 +820,11 @@ fn view_style(game: &Game) -> rowline_core::view::ViewStyle {
     let p = &game.design.palette;
     rowline_core::view::ViewStyle {
         background: p.background.into(),
-        // The board strip follows the theme, so the light theme does not
-        // keep the original's pure black.
-        board_backdrop: p.surface.into(),
-        cell_fill: rowline_core::render::Color::rgb(192, 192, 192),
+        // The board strip and the cell plates are semantic tokens, so the
+        // light theme gets its own warm-paper board instead of reusing the
+        // white page surface.
+        board_backdrop: p.board_backdrop.into(),
+        cell_fill: p.board_cell.into(),
         cell_border: p.outline_strong.into(),
         cell_radius: game.design.radius(rowline_theme::Radius::Sm),
         selection: p.selection.into(),
@@ -842,7 +905,11 @@ fn hud_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
         if colour != 0 {
             cmds.push(RenderCmd::Sprite {
                 sheet: rowline_core::render::SpriteSheetId::MAIN,
-                src: rowline_core::view::ball_src(colour, game.engine().use_figures() as u8, 1),
+                src: rowline_core::view::ball_src(
+                    colour,
+                    game.engine().use_figures() as u8,
+                    game.sheet_scale,
+                ),
                 dst: rowline_core::input::Point::new(cell.x + 4.0, cell.y + 4.0),
                 size: rowline_core::input::Size::new(32.0, 32.0),
                 tint: rowline_core::render::Color::WHITE,
@@ -880,6 +947,120 @@ fn hud_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
         size: ds.text_size(rowline_theme::TextRole::Numeric) as u16,
         color: p.text_primary.into(),
     });
+
+    cmds
+}
+
+/// The width of the statistics panel, in logical pixels.
+///
+/// The original's `XGrdCptDialog` client area is 154x289 (8 rows of 36 px);
+/// the re-implementation adds a 22 px title bar.
+const STATS_W: f32 = 154.0;
+/// The height of the statistics title bar.
+const STATS_TITLE_H: f32 = 22.0;
+/// The height of one statistics row -- one sprite slot plus its caption.
+const STATS_ROW_H: f32 = 36.0;
+
+/// Draw the statistics window.
+///
+/// Recovered from the live original (`XGrdCptDialog`, title `统计`,
+/// `0x404120`): eight rows, one per sprite slot.  Row 0 is the empty cell
+/// count; rows 1..=7 are the seven ball colours.  Every row reads
+/// `count (percent%)`; the ball rows append `,消除-N`, where `N` is the
+/// cumulative number of balls of that colour eliminated this game.
+fn stats_panel(game: &Game, layout: Layout) -> Vec<RenderCmd> {
+    let mut cmds = Vec::new();
+    let ds = &game.design;
+    let p = &ds.palette;
+
+    let height = STATS_TITLE_H + 8.0 * STATS_ROW_H;
+    let rect = rowline_core::render::Rect::new(
+        (layout.client_w as f32 - STATS_W - 2.0).max(0.0),
+        MENU_BAR_H + HUD_H + 2.0,
+        STATS_W,
+        height,
+    );
+    cmds.push(RenderCmd::Shadow {
+        rect,
+        radius: ds.radius(rowline_theme::Radius::Sm),
+        offset: rowline_core::input::Point::new(0.0, 6.0),
+        blur: 24.0,
+        color: p.shadow.into(),
+    });
+    cmds.push(RenderCmd::RoundedRect {
+        rect,
+        radius: ds.radius(rowline_theme::Radius::Sm),
+        color: p.surface_raised.into(),
+    });
+    cmds.push(RenderCmd::Outline {
+        rect,
+        color: p.outline.into(),
+    });
+
+    // The title bar.
+    cmds.push(RenderCmd::RoundedRect {
+        rect: rowline_core::render::Rect::new(rect.x, rect.y, rect.width, STATS_TITLE_H),
+        radius: ds.radius(rowline_theme::Radius::Sm),
+        color: p.surface_alt.into(),
+    });
+    cmds.push(RenderCmd::Text {
+        text: "\u{7edf}\u{8ba1}".to_string(),
+        at: rowline_core::input::Point::new(rect.x + 8.0, rect.y + 4.0),
+        size: ds.text_size(rowline_theme::TextRole::Label) as u16,
+        color: p.text_primary.into(),
+    });
+    cmds.push(RenderCmd::Text {
+        text: "\u{00d7}".to_string(),
+        at: rowline_core::input::Point::new(rect.x + rect.width - 16.0, rect.y + 3.0),
+        size: ds.text_size(rowline_theme::TextRole::Body) as u16,
+        color: p.text_tertiary.into(),
+    });
+
+    let counts = game.engine().colour_counts();
+    let cleared = game.engine().cleared_counts();
+    let total = rowline_core::board::BOARD_CELLS as u64;
+
+    for slot in 0..8usize {
+        let y = rect.y + STATS_TITLE_H + slot as f32 * STATS_ROW_H;
+        // The sprite slot: a light plate with a 3-D border, as in the
+        // original's `XGrdCpt` control.
+        let plate = rowline_core::render::Rect::new(rect.x, y, STATS_ROW_H, STATS_ROW_H);
+        cmds.push(RenderCmd::RoundedRect {
+            rect: plate,
+            radius: 0.0,
+            color: p.board_cell.into(),
+        });
+        cmds.push(RenderCmd::Outline {
+            rect: plate,
+            color: p.outline_strong.into(),
+        });
+        if slot != 0 {
+            cmds.push(RenderCmd::Sprite {
+                sheet: rowline_core::render::SpriteSheetId::MAIN,
+                src: rowline_core::view::ball_src(
+                    slot as u8,
+                    game.engine().use_figures() as u8,
+                    game.sheet_scale,
+                ),
+                dst: rowline_core::input::Point::new(plate.x + 3.0, plate.y + 3.0),
+                size: rowline_core::input::Size::new(30.0, 30.0),
+                tint: rowline_core::render::Color::WHITE,
+            });
+        }
+
+        let count = counts[slot];
+        let percent = count as u64 * 100 / total;
+        let mut text = format!("{count} ({percent}%)");
+        if slot != 0 {
+            text.push_str(&format!(",\u{6d88}\u{9664}-{}", cleared[slot]));
+        }
+        cmds.push(RenderCmd::Text {
+            text,
+            at: rowline_core::input::Point::new(rect.x + 44.0, y + 9.0),
+            size: ds.text_size(rowline_theme::TextRole::Body) as u16,
+            color: p.text_primary.into(),
+        });
+    }
 
     cmds
 }
@@ -1609,9 +1790,51 @@ mod tests {
     }
 
     #[test]
+    fn the_statistics_panel_is_opt_in_and_lists_every_slot() {
+        let mut g = Game::new(7, RuleModel::default());
+        let layout = rowline_core::layout::Layout::compute(1280, 960);
+        // The original ships with ShowStatistics=0.
+        assert!(!g.settings().show_statistics);
+        let texts = |cmds: &[RenderCmd]| -> Vec<String> {
+            cmds.iter()
+                .filter_map(|c| match c {
+                    RenderCmd::Text { text, .. } => Some(text.clone()),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert!(!texts(&frame(&g, layout)).iter().any(|t| t == "统计"));
+
+        g.settings.show_statistics = true;
+        {
+            let b = g.engine_mut().board_mut();
+            b.cells_mut().fill(0);
+            b.set(0, 0, 1);
+        }
+        let cmds = frame(&g, layout);
+        let texts = texts(&cmds);
+        assert!(texts.iter().any(|t| t == "统计"));
+        // 80 empty cells of 81 -> 98%, one green ball -> 1%.
+        assert!(
+            texts.iter().any(|t| t == "80 (98%)"),
+            "empty row missing: {texts:?}"
+        );
+        assert!(
+            texts.iter().any(|t| t == "1 (1%),消除-0"),
+            "colour row missing: {texts:?}"
+        );
+        // Seven ball rows plus the empty row.
+        assert_eq!(
+            texts.iter().filter(|t| t.contains('%')).count(),
+            8,
+            "the panel must have eight statistic rows"
+        );
+    }
+
+    #[test]
     fn the_game_over_dialog_appears_when_there_is_no_move() {
         let mut g = Game::new(7, RuleModel::default());
-        g.game_over = true;
+        g.set_game_over(true);
         let layout = rowline_core::layout::Layout::compute(1280, 960);
         let cmds = frame(&g, layout);
         let texts: Vec<&str> = cmds
@@ -1675,13 +1898,41 @@ mod tests {
         g.name_key(rowline_core::input::Key::Backspace);
         assert_eq!(g.name_input, "挑战者");
         g.accept_name();
-        assert_eq!(g.overlay, Overlay::None);
+        // The original shows the leaderboard right after the name is entered.
+        assert_eq!(g.overlay, Overlay::Scoreboard);
         // The new record joins the CPU's default entry.
         assert_eq!(g.scores().len(), 2);
         assert_eq!(g.scores()[0].name, "挑战者");
         assert_eq!(g.scores()[0].score, 120);
         assert_eq!(g.scores()[1].name, "国王");
         assert_eq!(g.scores()[1].score, 100);
+    }
+
+    #[test]
+    fn the_score_is_only_inserted_when_the_game_is_over() {
+        let mut g = Game::new(7, RuleModel::default());
+        g.engine_mut().set_score(120);
+        // A qualifying score does not open the name entry mid-game.
+        assert_eq!(g.overlay, Overlay::None);
+        assert_eq!(g.scores().len(), 1);
+
+        g.set_game_over(true);
+        // The message is modal until acknowledged.
+        assert!(g.game_over && !g.game_over_ack);
+        g.ack_game_over();
+        assert_eq!(g.overlay, Overlay::NameEntry);
+        g.accept_name();
+        assert_eq!(g.overlay, Overlay::Scoreboard);
+        assert_eq!(g.scores().len(), 2);
+    }
+
+    #[test]
+    fn a_losing_score_does_not_open_the_name_entry() {
+        let mut g = Game::new(7, RuleModel::default());
+        g.engine_mut().set_score(0);
+        g.set_game_over(true);
+        g.ack_game_over();
+        assert_eq!(g.overlay, Overlay::None);
     }
 
     #[test]

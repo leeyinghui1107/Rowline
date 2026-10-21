@@ -146,12 +146,22 @@ pub struct GameState {
     pub show_next: bool,
     pub show_statistics: bool,
     pub use_figures: bool,
-    pub next_colour: u8,
+    pub next_group: [u8; 3],
+    pub sheet_scale: u32,
     pub layout: Layout,
 }
 ```
 
 `GameState` 是**只读快照**；权威可变状态在 `Engine` 里。UI 与渲染层拿不到可变引用。
+
+`Engine` 另外保存统计窗口所需的两个数组：
+
+```rust
+/// 当前棋盘上每种颜色的球数（下标 0 = 空格子）。
+pub fn colour_counts(&self) -> [u32; 8];
+/// 本局每种颜色累计消除的球数；新局清零（原作 0x40B2C4 / 0x40282F）。
+pub fn cleared_counts(&self) -> [u32; 8];
+```
 
 ### 3.4 `core::view` —— 纯函数式出图
 
@@ -302,11 +312,11 @@ rowline-app      = { path = "crates/app" }
 |---|---|---|---|
 | **M0 空窗口** | 打开窗口、HiDPI 正确、清屏、退出 | 窗口可开可关；`scale_factor` 正确传递到渲染 | ✅ 已实现（`app` 的 gpu 路径） |
 | **M1 静态帧** | 用 `build_frame` 画出棋盘 | 渲染结果与 `geometry.py` 实测几何**逐像素一致** | ✅ 已实现（`core::view` + wgpu/softbuffer 后端） |
-| **M2 输入** | 点击 → 选球 → 落子 → 消除 | `BB-K01..K10` 通过；输入映射与 `Command` 表一致 | 🟡 框架已实现（`Game::handle_event`），**语义待黑盒定标** |
-| **M3 核心玩法** | 连通判定、寻路、补球、计分 | **四方差分门**（Python ≡ C ≡ Rust ≡ golden）全绿 | ✅ 差分门已就位；语义待定标 |
-| **M4 存档** | INI/JSON 设置 + 高分榜 + 原作导入器 | 老注册表数据可导入；往返一致 | 🟡 布局与 `legacy` 编解码已实现，**读写器与导入器未写** |
-| **M5 表现** | 动画、消除高亮、菜单、关于框、帮助 | 评审通过 | ⬜ 菜单/对话框未做 |
-| **M6 打包** | Windows/macOS/Linux 分发包、CI | 三平台产物可运行 | ⬜ |
+| **M2 输入** | 点击 → 选球 → 落子 → 消除 | `Game::handle_event` 与 `Command` 表一致 | ✅ |
+| **M3 核心玩法** | 直线清除、4 邻域寻路、补球、计分、满盘结束 | **四方差分门**（Python ≡ C ≡ Rust ≡ golden）全绿 | ✅ `ALL MATCH` |
+| **M4 存档** | INI/JSON 设置 + 高分榜 + 原作导入器 | 老注册表数据可导入；往返一致 | ✅ |
+| **M5 表现** | 动画、消除高亮、菜单、关于框、帮助 | 评审通过 | ✅ |
+| **M6 打包** | Windows/macOS/Linux 分发包、CI | 三平台产物可运行 | ✅ |
 
 ### 5.1 每阶段的"不变量"
 
@@ -324,34 +334,32 @@ rowline-app      = { path = "crates/app" }
 
 ## 6. 关键接口代码骨架
 
-### 6.1 `core` 的规则模型（不确定性集中处）
+### 6.1 `core` 的规则模型（已定标）
 
 ```rust
 #[derive(Clone, Copy, Debug)]
 pub struct RuleModel {
-    pub threshold: usize,            // BB-G03   已确认 = 5
-    pub source_keeps_colour: bool,   // BB-G03
-    pub max_turns: Option<usize>,    // BB-G04
-    pub refill: usize,               // BB-G02 / BB-G06
-    pub initial_balls: usize,         // BB-G01 -> 5 (screenshot)
-    pub points_per_ball: i64,        // BB-G11
-    pub min_score_delta: i64,        // BB-G11
-    pub allow_revisit_source: bool,  // BB-G05
+    pub threshold: usize,           // 5，0x401AF8
+    pub spawn_per_move: usize,      // 3，仅未消线的回合
+    pub initial_balls: usize,       // 5，0x402801
+    pub source_keeps_colour: bool,  // false
 }
 ```
 
-> 每个字段都标注**对应的黑盒采集项编号**。定标时只改这一个结构体
-> （Python / C / Rust 各一份），差分门立刻验证三方是否仍一致。
+> 清除形状、4 邻域移动、分值表与结束条件都是固定语义，见 `rules.rs`；
+> 三个实现（Python / C / Rust）逐字节一致，差分门验证四方相同。
 
 ### 6.2 引擎的一次移动
 
 ```rust
 pub fn move_ball(&mut self, r0: i32, c0: i32, r1: i32, c1: i32) -> MoveResult {
     // 1) 边界与合法性
-    // 2) find_path（8 连通、空格行走、方向序固定）
-    // 3) 落子
-    // 4) connected_group（阈值 model.threshold）
-    // 5) 消除 + 计分 + 补球
+    // 2) find_path（4 邻域、空格行走、方向序固定）
+    // 3) 落子（源格清空）
+    // 4) find_lines（过落点的整条直线，阈值 5）
+    // 5) 有消线：清除 + 非线性计分，不补球
+    //    无消线：补 3 球
+    // 6) 棋盘无空位 → 游戏结束
 }
 ```
 
