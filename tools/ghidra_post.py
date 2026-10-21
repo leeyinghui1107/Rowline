@@ -228,17 +228,17 @@ def run():
             continue
         res = ifc.decompileFunction(fn, 120, monitor)
         txt = res.getDecompiledFunction().getC() if res.getDecompiledFunction() else "/* failed */"
-        with open(os.path.join(outdir, name + ".c"), "w") as fh:
+        with open(os.path.join(outdir, name + ".c"), "w", encoding="utf-8") as fh:
             fh.write("/* %s @ 0x%X -- %s */\n" % (name, addr, comment))
             fh.write(txt + "\n")
         manifest[name] = {"addr": hex(addr), "comment": comment}
     ifc.dispose()
 
-    with open(os.path.join(outdir, "anchors.json"), "w") as fh:
+    with open(os.path.join(outdir, "anchors.json"), "w", encoding="utf-8") as fh:
         json.dump({"functions": manifest,
                    "menu_command_ids": {str(k): v for k, v in MENU_IDS.items()}},
                   fh, indent=2, ensure_ascii=False)
-    with open(os.path.join(outdir, "menu_command_ids.h"), "w") as fh:
+    with open(os.path.join(outdir, "menu_command_ids.h"), "w", encoding="utf-8") as fh:
         fh.write("/* Menu command IDs recovered from RT_MENU + RT_ACCELERATOR.\n"
                  " * Labels are Simplified Chinese, verbatim from the resource. */\n")
         for k in sorted(MENU_IDS):

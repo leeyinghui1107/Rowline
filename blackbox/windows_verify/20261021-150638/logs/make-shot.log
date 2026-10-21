@@ -1,0 +1,3 @@
+rust/target/release/rowline-shot.exe --out build/shot.png --width 1280 --height 900
+wrote build/shot.png (1280x900)
+"wrote build/shot.png"

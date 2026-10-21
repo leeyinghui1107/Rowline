@@ -13,17 +13,26 @@ CFLAGS  ?= -std=c99 -O2 -Wall -Wextra -Wno-unused-parameter
 SRC     := reference/c-impl
 BUILD   := build
 
+# On Windows every executable carries an .exe suffix, including the ones the
+# C compiler and cargo produce.  Without this the recipes below work under an
+# MSYS/Git-Bash shell but fail when make falls back to cmd.exe.
+ifeq ($(OS),Windows_NT)
+EXE     := .exe
+else
+EXE     :=
+endif
+
 # ------------------------------------------------------------------ replay
 REPLAY_SRC := $(SRC)/wl_model.c $(SRC)/wl_replay.c
-REPLAY_BIN := $(BUILD)/rowline-replay
+REPLAY_BIN := $(BUILD)/rowline-replay$(EXE)
 
 # ------------------------------------------------------------------ app
 APP_SRC := $(SRC)/wl_model.c $(SRC)/wl_layout.c $(SRC)/wl_render.c $(SRC)/wl_main.c
-APP_BIN := $(BUILD)/rowline
+APP_BIN := $(BUILD)/rowline$(EXE)
 
 # ------------------------------------------------------------------ checks
 CHECK_SRC := $(SRC)/wl_model.c $(SRC)/wl_layout.c $(SRC)/wl_layout_check.c
-CHECK_BIN := $(BUILD)/rowline-layout-check
+CHECK_BIN := $(BUILD)/rowline-layout-check$(EXE)
 
 # The C implementation under reference/c-impl is the *reference
 # implementation* of the behaviour spec.  It is kept because the differential
@@ -32,9 +41,17 @@ CHECK_BIN := $(BUILD)/rowline-layout-check
 
 # ------------------------------------------------------------------ rust
 RUST_DIR  := rust
-RUST_BIN  := $(RUST_DIR)/target/release/rowline-replay
-# On Windows the binary carries an .exe suffix.
-RUST_BIN_EXE := $(RUST_BIN).exe
+RUST_BIN  := $(RUST_DIR)/target/release/rowline-replay$(EXE)
+SHOT_BIN  := $(RUST_DIR)/target/release/rowline-shot$(EXE)
+
+# Decide at parse time whether the four-way gate can include Rust.  Doing this
+# in make (instead of `if [ -x ... ]` in the recipe) keeps `make test` working
+# when make uses cmd.exe rather than sh.
+ifneq ($(strip $(wildcard $(RUST_BIN))),)
+RUST_GATE := $(RUST_BIN)
+else
+RUST_GATE :=
+endif
 
 SDL_CFLAGS ?= $(shell sdl2-config --cflags 2>/dev/null)
 SDL_LIBS   ?= $(shell sdl2-config --libs 2>/dev/null || echo -lSDL2)
@@ -77,33 +94,27 @@ $(SHOT_BIN):
 	cd $(RUST_DIR) && cargo build --release -p rowline-tools
 
 $(BUILD):
-	mkdir -p $(BUILD)
+	"$(PYTHON)" -c "import os; os.makedirs(r'$(BUILD)', exist_ok=True)"
 
 sheet:
-	$(PYTHON) tools/make_sheet.py
+	"$(PYTHON)" tools/make_sheet.py
 
 icons:
-	$(PYTHON) tools/make_icons.py
+	"$(PYTHON)" tools/make_icons.py
 
 package:
-	$(PYTHON) tools/package.py
+	"$(PYTHON)" tools/package.py
 
 # Render a frame into a PNG without a GPU or a display.
-SHOT_BIN := $(RUST_DIR)/target/release/rowline-shot
-
 shot: $(SHOT_BIN)
 	$(SHOT_BIN) --out $(BUILD)/shot.png --width 1280 --height 900
 	@echo "wrote $(BUILD)/shot.png"
 
 test: $(REPLAY_BIN) $(CHECK_BIN)
 	$(CHECK_BIN)
-	@if [ -x "$(RUST_BIN)" ] || [ -x "$(RUST_BIN_EXE)" ]; then \
-	    echo "--- four-way differential gate (python / c / rust / golden) ---"; \
-	else \
-	    echo "--- rust not built; run 'make rust' for the four-way gate ---"; \
-	fi
-	$(PYTHON) tools/replay/diff_replay.py --all
+	@echo "$(if $(RUST_GATE),--- four-way differential gate (python / c / rust / golden) ---,--- rust not built; run 'make rust' for the four-way gate ---)"
+	"$(PYTHON)" tools/replay/diff_replay.py --all
 
 clean:
-	rm -rf $(BUILD)
-	cd $(RUST_DIR) && cargo clean 2>/dev/null || true
+	"$(PYTHON)" -c "import shutil; shutil.rmtree(r'$(BUILD)', ignore_errors=True)"
+	cd $(RUST_DIR) && cargo clean

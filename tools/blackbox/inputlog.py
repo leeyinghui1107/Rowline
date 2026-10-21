@@ -62,7 +62,7 @@ def main():
     t0 = time.perf_counter()
     mouse_down = False
 
-    with open(a.out, "w", newline="") as fh:
+    with open(a.out, "w", encoding="utf-8", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["t_ms", "kind", "key", "vk", "x", "y", "extra"])
         while time.perf_counter() - t0 < a.seconds:

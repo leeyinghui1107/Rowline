@@ -74,7 +74,8 @@ if __name__=="__main__":
     print(f"TOTAL resource payload: {total} bytes ({total/1024:.1f} KB)")
     # extract
     import json
-    json.dump([{"path":p,"rva":r,"size":s} for p,r,s,c in manifest], open(os.path.join(outdir,"_manifest.json"),"w"), indent=1)
+    json.dump([{"path":p,"rva":r,"size":s} for p,r,s,c in manifest],
+              open(os.path.join(outdir,"_manifest.json"),"w",encoding="utf-8"), indent=1)
     for path, drva, dsz, cp in manifest:
         o = pe.off(drva)
         if o is None: continue

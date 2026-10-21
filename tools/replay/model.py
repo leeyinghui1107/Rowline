@@ -356,7 +356,7 @@ def parse_trace(text):
     return seed, board, ops
 
 def load_trace(path):
-    return parse_trace(open(path).read())
+    return parse_trace(open(path, encoding="utf-8").read())
 
 def run_trace(seed, board, ops, model=None):
     eng = Engine(Board(board) if board else Board(), score=0, seed=seed, model=model)

@@ -202,7 +202,8 @@ class Report:
 
     def to_json(self, path):
         os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
-        json.dump({"checks": self.rows}, open(path, "w"), indent=1, ensure_ascii=False)
+        json.dump({"checks": self.rows}, open(path, "w", encoding="utf-8"),
+                  indent=1, ensure_ascii=False)
 
 
 # ---------------------------------------------------------------- shot
@@ -263,9 +264,11 @@ def cmd_shot(a):
     if a.out:
         os.makedirs(a.out, exist_ok=True)
         rep.to_json(os.path.join(a.out, "conformance_shot.json"))
-        json.dump(m, open(os.path.join(a.out, "geometry.json"), "w"), indent=1)
+        json.dump(m, open(os.path.join(a.out, "geometry.json"), "w", encoding="utf-8"),
+                  indent=1)
         json.dump({"board": board, "palette": {k: list(v) for k, v in palette.items()}},
-                  open(os.path.join(a.out, "board_map.json"), "w"), indent=1)
+                  open(os.path.join(a.out, "board_map.json"), "w", encoding="utf-8"),
+                  indent=1)
         print("  -> %s" % a.out)
     return 0
 
@@ -279,7 +282,7 @@ def cmd_probe(a):
     # ---- window tree
     wp = os.path.join(d, "windows.json")
     if os.path.exists(wp):
-        wj = json.load(open(wp))
+        wj = json.load(open(wp, encoding="utf-8"))
         wins = wj.get("windows", [])
         classes = [x["class"] for x in wins]
         rep.add("main window class present", True, SPEC["window_class"] in classes)
@@ -297,7 +300,7 @@ def cmd_probe(a):
     # ---- menu tree
     mp = os.path.join(d, "menu.json")
     if os.path.exists(mp):
-        mj = json.load(open(mp))
+        mj = json.load(open(mp, encoding="utf-8"))
         ids = [m["id"] for m in mj.get("menu", []) if m.get("id")]
         missing = [i for i in SPEC["menu_ids"] if i not in ids]
         rep.add("all expected menu ids present", [], missing)
@@ -312,7 +315,7 @@ def cmd_probe(a):
     # ---- config
     cp = os.path.join(d, "config.json")
     if os.path.exists(cp):
-        cj = json.load(open(cp))
+        cj = json.load(open(cp, encoding="utf-8"))
         ini = cj.get("ini", [])
         if ini and ini[0].get("present"):
             raw = bytes.fromhex(ini[0]["data"])
@@ -347,7 +350,8 @@ def cmd_probe(a):
                 if a.out:
                     os.makedirs(a.out, exist_ok=True)
                     json.dump({"records": recs},
-                              open(os.path.join(a.out, "score_table.json"), "w"),
+                              open(os.path.join(a.out, "score_table.json"), "w",
+                                   encoding="utf-8"),
                               indent=1, ensure_ascii=False)
             elif r["value"] == "Hash":
                 rep.add("Hash size", SPEC["hash_len"], size)
@@ -357,7 +361,8 @@ def cmd_probe(a):
                 if a.out:
                     os.makedirs(a.out, exist_ok=True)
                     json.dump({"words": words},
-                              open(os.path.join(a.out, "score_hash.json"), "w"), indent=1)
+                              open(os.path.join(a.out, "score_hash.json"), "w",
+                                   encoding="utf-8"), indent=1)
             print("  registry %s: %d bytes type=%s" % (r["value"], size, r.get("type")))
     else:
         print("  (no config.json)")

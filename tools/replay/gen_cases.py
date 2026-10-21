@@ -31,7 +31,7 @@ def gen(seed, n_moves, name):
     for o in ops:
         lines.append("op " + " ".join(str(x) for x in o))
     path = os.path.join(OUT, name)
-    open(path, "w").write("\n".join(lines) + "\n")
+    open(path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
     return path, len(ops)
 
 if __name__ == "__main__":
@@ -50,5 +50,5 @@ if __name__ == "__main__":
             "op click 2 2",
             "op setusefigures 1",
             "op newgame"]
-    open(os.path.join(OUT, "edge_005.trace"), "w").write("\n".join(hand) + "\n")
+    open(os.path.join(OUT, "edge_005.trace"), "w", encoding="utf-8").write("\n".join(hand) + "\n")
     print("wrote edge_005.trace")

@@ -77,5 +77,6 @@ for r in range(ROWS):
 
 json.dump({"cell": CELL, "cols": COLS, "rows": ROWS,
            "note": "file coords, bottom-up BMP; display row = rows-1-r",
-           "table": table}, open("/tmp/wl_png/sprite_table.json", "w"), indent=1)
+           "table": table}, open("/tmp/wl_png/sprite_table.json", "w", encoding="utf-8"),
+          indent=1)
 print("\nwrote /tmp/wl_png/sprite_table.json")

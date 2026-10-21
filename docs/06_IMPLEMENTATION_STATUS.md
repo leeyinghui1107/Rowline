@@ -80,6 +80,7 @@
 | GitHub Actions（rust / C / 差分门 / 资产可复现） | ✅ | `.github/workflows/ci.yml` |
 | 打包脚本（平台 bundle + README） | ✅ | `tools/package.py` |
 | 零编译警告 | ✅ | `cargo build --workspace --all-features` |
+| **Windows 工具链自检**（cargo build/test + make test/shot + winprobe + 黑盒管线，证据归档） | ✅ 8/8 | `tools/win/verify.ps1` · `blackbox/windows_verify/20261021-150638/` |
 
 ---
 

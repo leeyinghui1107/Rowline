@@ -1,0 +1,40 @@
+=== screenshot conformance: mock_centred.png ===
+  measured board origin : (348, 268)
+  hypothesis 'centred'  : (348, 268)   delta +0 / +0
+  hypothesis 'legacy'   : (458, 501)   delta -110 / -233
+
+  measured board map (colour name per slot):
+    BLUE     GREEN    RED      RED      RED      GREEN    GREEN    RED      MAROON  
+    BLUE     RED      0        MAGENTA  BLUE     MAROON   MAGENTA  GREEN    RED     
+    0        RED      BLUE     RED      RED      BLUE     RED      CYAN     MAGENTA 
+    BLUE     0        BLUE     CYAN     CYAN     CYAN     GREEN    MAGENTA  CYAN    
+    MAGENTA  YELLOW   RED      MAROON   YELLOW   MAGENTA  MAGENTA  GREEN    0       
+    YELLOW   YELLOW   YELLOW   YELLOW   0        MAGENTA  0        MAGENTA  RED     
+    GREEN    CYAN     BLUE     MAROON   BLUE     RED      BLUE     0        0       
+    MAGENTA  0        MAGENTA  0        BLUE     YELLOW   MAGENTA  0        CYAN    
+    MAGENTA  RED      BLUE     RED      0        YELLOW   MAROON   0        0       
+  distinct colours observed: 7 -> BLUE, CYAN, GREEN, MAGENTA, MAROON, RED, YELLOW
+    BLUE       #0000A8
+    CYAN       #00A8A8
+    GREEN      #009500
+    MAGENTA    #A800A8
+    MAROON     #8D0000
+    RED        #A80000
+    YELLOW     #A8A800
+
+  ITEM                               EXPECTED               MEASURED               RESULT
+  ----------------------------------------------------------------------------------------------
+  board origin X (centred hypothesis) 348                    348                    OK
+  board origin Y (centred hypothesis) 268                    268                    OK
+  the centred hypothesis fits        |delta| <= 4           dx +0, dy +0           OK
+  the legacy hypothesis fits         |delta| <= 4           dx -110, dy -233       DIFF (docs/11 section 5d: the binary constant is still unidentified)
+  cell size px                       36                     36                     OK
+  grid side                          9                      9                      OK
+  board frame width                  327                    327                    OK
+  board frame height                 328                    328                    OK
+  grid coverage (all sprites inside grid) >=0.95                 1.0                    OK
+  distinct colours observed          7                      7                      OK
+  colour names all known             known names            BLUE,CYAN,GREEN,MAGENT OK
+  ----------------------------------------------------------------------------------------------
+  11 checks, 10 match, 1 differ
+  -> D:\source\09_my\Rowline\blackbox\windows_verify\20261021-150638\shot

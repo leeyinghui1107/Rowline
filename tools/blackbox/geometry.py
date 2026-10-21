@@ -156,6 +156,6 @@ if __name__ == "__main__":
     print("=== geometry of %s ===" % os.path.basename(a.image))
     print(report(m))
     if a.json:
-        json.dump(m, open(a.json, "w"), indent=1)
+        json.dump(m, open(a.json, "w", encoding="utf-8"), indent=1)
         print("  -> %s" % a.json)
     sys.exit(1 if "error" in m else 0)

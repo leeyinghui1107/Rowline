@@ -1,0 +1,81 @@
+{
+ "checks": [
+  {
+   "name": "board origin X (centred hypothesis)",
+   "expected": 348,
+   "measured": 348,
+   "ok": true,
+   "note": "delta +0"
+  },
+  {
+   "name": "board origin Y (centred hypothesis)",
+   "expected": 268,
+   "measured": 268,
+   "ok": true,
+   "note": "delta +0"
+  },
+  {
+   "name": "the centred hypothesis fits",
+   "expected": "|delta| <= 4",
+   "measured": "dx +0, dy +0",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "name": "the legacy hypothesis fits",
+   "expected": "|delta| <= 4",
+   "measured": "dx -110, dy -233",
+   "ok": false,
+   "note": "docs/11 section 5d: the binary constant is still unidentified"
+  },
+  {
+   "name": "cell size px",
+   "expected": 36,
+   "measured": 36,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "name": "grid side",
+   "expected": 9,
+   "measured": 9,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "name": "board frame width",
+   "expected": 327,
+   "measured": 327,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "name": "board frame height",
+   "expected": 328,
+   "measured": 328,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "name": "grid coverage (all sprites inside grid)",
+   "expected": ">=0.95",
+   "measured": 1.0,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "name": "distinct colours observed",
+   "expected": 7,
+   "measured": 7,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "name": "colour names all known",
+   "expected": "known names",
+   "measured": "BLUE,CYAN,GREEN,MAGENTA,MAROON,RED,YELLOW",
+   "ok": true,
+   "note": ""
+  }
+ ]
+}

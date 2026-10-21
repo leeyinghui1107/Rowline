@@ -428,7 +428,7 @@ if __name__ == "__main__":
             strip.png(os.path.join(OUT, "icons%s.png" % suffix))
         # The artist's source: one SVG per icon plus a contact sheet.
         for name, fn in ICONS:
-            with open(os.path.join(OUT, "%s.svg" % name), "w") as fh:
+            with open(os.path.join(OUT, "%s.svg" % name), "w", encoding="utf-8") as fh:
                 fh.write(svg_for(name, fn))
         print("wrote %d SVG sources to %s" % (len(ICONS), OUT))
         print("icon order: %s" % ", ".join(n for n, _ in ICONS))

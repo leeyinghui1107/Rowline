@@ -1,6 +1,6 @@
 # Windows 开发机工作清单
 
-> **状态**：待执行（在 Windows 开发机上完成黑盒阶段 + 产品侧验证）
+> **状态**：部分执行 —— 2026-10-21 已在 Windows 11（10.0.26200）+ MSYS2/MinGW 上跑通工具链与产品侧自检，见 §9 与 `blackbox/windows_verify/20261021-150638/`；原作黑盒采集尚未开始（本仓库不含 `WinLinez.EXE`）
 > **适用**：后续主战场迁移到 Windows 平台
 > **关联**：`tools/blackbox/README.md`（采集操作手册） · `docs/01_BLACKBOX_PLAN.md`（采集项定义） · `docs/03_FEATURE_SPEC.md`（行为规格） · `docs/11_SCREENSHOT_OBSERVATIONS.md`（截图证据）
 > **证据落点**：`blackbox/`（清单与证据） · `docs/11` §7（未决事项）
@@ -62,6 +62,7 @@
 
 | 用途 | 工具 | Windows 上的获取 / 注意 |
 |---|---|---|
+| **一键自检** | `tools/win/verify.ps1` | 自动定位真实的 Python / cargo / gcc / make，依次跑 `cargo build/test`、`make test`、`make shot`、编译 `winprobe.c`，结果写入 `blackbox/windows_verify/<时间戳>/summary.json`。`powershell -NoProfile -ExecutionPolicy Bypass -File tools\win\verify.ps1` |
 | 运行时采集 | `tools/blackbox/winprobe.c` | **纯 Win32**（只依赖 `windows.h`/`stdio`/`stdlib`/`string`/`tchar`）→ MSVC `cl /nologo /W4 winprobe.c /Fe:winprobe.exe` 或 MinGW `gcc -O2 -Wall winprobe.c -o winprobe.exe` |
 | 输入录制 | `tools/blackbox/inputlog.py` | **Windows 原生**（`ctypes` + `GetAsyncKeyState`），纯标准库 |
 | 宏回放 | `tools/blackbox/inputlog_ahk.ahk` | **AutoHotkey v2**（`Ctrl+Alt+R` 开始/停止，`F8` 打 MARKER） |
@@ -74,7 +75,7 @@
 | 产品构建 | Rust + wgpu | `cargo build --release` → **DX12**；CI 的 windows-latest 已覆盖 |
 | 其它 | Python 3.9+、ProcMon、WinSpy、OBS | |
 
-### 1.3 ⚠️ Windows 特有的 5 个坑
+### 1.3 ⚠️ Windows 特有的 8 个坑
 
 1. **截图必须本机、无损、100%**
    - 系统缩放设为 **100%**（笔记本默认常是 125/150%，一缩放像素测量就废了）
@@ -101,6 +102,27 @@
 5. **`python3` 不存在**
    - Windows 的 Python 安装器只给 `python`
    - Makefile 已参数化：`make PYTHON=python ...`
+   - 但 `where python` 常常先命中 `...\WindowsApps\python.exe`（应用商店别名，不是解释器）→ 用真实路径，或让 `verify.ps1` 自动跳过
+
+6. **用户名含中文 → GNU ld 链接 proc-macro 失败**
+   - 现象：`cargo build` 在 `serde_derive` / `zerocopy-derive` 处报 `cannot find ...\rustlib\x86_64-pc-windows-gnu\lib\libstd-*.rlib: No such file or directory`，但文件确实存在
+   - 原因：MSYS2 的 `ld.exe` 打不开非 ASCII 路径下的 rlib
+   - 处理：把 Rust 工具链放到纯 ASCII 路径（本机为 `D:\rustup` / `D:\cargo`）：
+     ```bat
+     set RUSTUP_HOME=D:\rustup
+     set CARGO_HOME=D:\cargo
+     set PATH=D:\cargo\bin;C:\msys64\ucrt64\bin;%PATH%
+     ```
+     `tools\win\verify.ps1` 会自动探测 `D:\rustup` / `D:\cargo`
+
+7. **Python 的默认文本编码是 CP936**
+   - `json.load(open(...))` 读 UTF-8 的 `blackbox/checklist.json` 会报 `UnicodeDecodeError: 'gbk' codec ...`
+   - 已修：`tools/` 下所有文本 I/O 显式 `encoding="utf-8"`；新增脚本请沿用
+
+8. **make 的默认 shell 可能是 `cmd.exe`**
+   - 旧 Makefile 在 `test` 目标里用 `if [ -x ... ]`，cmd 下报 `-x 此时不应有`，`make` 以 Error 255 结束
+   - 已修：改用 make 级 `$(wildcard)` 判断；C/Rust 产物统一加 `$(EXE)` 后缀；`mkdir`/`clean` 改用 Python
+   - 若仍想让 make 用 sh：`set PATH=C:\msys64\usr\bin;%PATH%`，或 `make SHELL=C:/msys64/usr/bin/sh.exe ...`
 
 ---
 
@@ -108,6 +130,9 @@
 
 | 资产 | 位置 | 说明 |
 |---|---|---|
+| **Windows 一键自检** | `tools/win/verify.ps1` | 工具链定位 + 全部门禁 + 证据归档（8 项检查，见 §9） |
+| Makefile Windows 兼容 | `Makefile` | `.exe` 后缀、make 级 Rust 门禁判断、Python 建目录；`make shot` 的 `SHOT_BIN` 顺序 bug 已修 |
+| UTF-8 文本 I/O | `tools/**/*.py` | 所有 `open()` 显式 `encoding="utf-8"`，避免 CP936 解码失败 |
 | 布局**双假设**报告 | `tools/blackbox/analyze.py` | 截图符合性同时给出 `centred`（截图所见）与 `legacy`（二进制常量）两套预测及 delta，并明确判定哪个成立（两者差 110/233 px，肉眼可辨） |
 | 双假设回归夹具 | `tools/blackbox/simulate.py --layout` | 可生成任一布局的模拟图 |
 | Windows 差分门兼容 | `tools/replay/diff_replay.py` | 自动尝试 `.exe` 后缀 |
@@ -189,6 +214,8 @@ cargo test  --release --workspace --all-features
 cd ..
 make PYTHON=python CC=gcc replay check && make PYTHON=python CC=gcc test
 REM    期望：布局门 PASSED (0 failures) + 四方差分门 RESULT: ALL MATCH
+REM    或直接跑一键自检（推荐；自动处理 Python/cargo/.exe/UTF-8）：
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\win\verify.ps1
 
 REM ── 2. 沙箱里跑原作，运行时快照（一次关掉 6+ 项）
 start WinLinez.EXE
@@ -266,6 +293,10 @@ blackbox/
 | `git push` 被拒：`refusing to allow a PAT to create or update workflow` | PAT 缺 `workflow` scope | 改用 SSH：`git remote set-url origin git@github.com:leeyinghui1107/Rowline.git` |
 | CI 的 "C reference implementation" 失败，`ld: open() failed ... 'build/rowline-replay'` | `build/` 被 gitignore，全新 clone 没有该目录 | 编译前 `mkdir -p build`（已修） |
 | `make test` 报 `python3: command not found` | Windows 只有 `python` | `make PYTHON=python ...`（已参数化） |
+| `make test` 报 `-x 此时不应有` / Error 255 | make 用了 `cmd.exe`，旧 `test` 目标里的 `if [ -x ]` 不是 cmd 语法 | 已修（make 级 `$(wildcard)`）；或用 `make SHELL=C:/msys64/usr/bin/sh.exe` |
+| `cargo build` 报 `cannot find ...libstd-*.rlib`（文件其实存在） | 用户目录含中文，MSYS2 `ld.exe` 打不开非 ASCII 路径 | `set RUSTUP_HOME=D:\rustup` + `set CARGO_HOME=D:\cargo`，见 §1.3 第 6 条 |
+| `make shot` 报 `No rule to make target '...rowline-shot'` | 旧 Makefile 把 `SHOT_BIN` 定义在规则之后，且 Windows 产物带 `.exe` | 已修（定义提前 + `$(EXE)`） |
+| `checklist.py` / `analyze.py` 报 `UnicodeDecodeError: 'gbk' codec` | Python 在 Windows 上默认按 CP936 打开文本 | 已修（显式 UTF-8）；旧脚本请补 `encoding="utf-8"` |
 | 差分门报 "rust-implementation not built" | Windows 下二进制是 `.exe` | `diff_replay.py` 已兼容；若仍失败请手动确认 `rust\target\release\rowline-replay.exe` 存在 |
 | 截图量出来的格子数和预期差 1~2 px | 截图被缩放 / 带了标题栏 / 系统 DPI ≠ 100% | 重截：客户区、100% 缩放、PNG 无损 |
 | 录制脚本卡住不动 | 反作弊弹窗抢焦点 | AHK 里加对该窗口的自动关闭 |
@@ -285,11 +316,40 @@ blackbox/
 
 ---
 
-## 9. 未在本机完成、需要 Windows 侧补的收尾
+## 9. Windows 侧收尾验证
 
-- [ ] Windows 上 `cargo test --release --workspace --all-features` 全绿
-- [ ] Windows 上 `make PYTHON=python CC=gcc test` → `RESULT: ALL MATCH`
-- [ ] Windows 上 `make shot` 出图正常（中文不显示方框 → 说明系统 CJK 字体被正确找到）
-- [ ] `rowline-shot` 在 Windows 上跑通（字体查找顺序：**CJK 优先** —— macOS `PingFang` / Linux `Noto Sans CJK` / Windows `msyh`(微软雅黑) → 拉丁回退 `Arial`）
-- [ ] 原作与重构版并排对拍记录
-- [ ] 三档 DPI 的截图留档
+### 9.1 已在本机完成（2026-10-21）
+
+证据目录：`blackbox/windows_verify/20261021-150638/`（`summary.json`：**8/8 PASS**）
+
+| 检查 | 结果 | 证据 |
+|---|---|---|
+| `cargo build --release --workspace --all-features` | ✅ exit 0（Rust 1.99.1 GNU host，MSYS2 gcc 16.1.0） | `logs/cargo-build.log` |
+| `cargo test --release --workspace --all-features` | ✅ **127 passed / 0 failed**（22 个测试目标 + doc-tests） | `logs/cargo-test.log` |
+| `make test` | ✅ 布局门 `PASSED (0 failure(s))` + 四方差分门 `RESULT: ALL MATCH` | `logs/make-test.log` |
+| `make shot` | ✅ `build/shot.png`，1280×900，47,260 B | `logs/make-shot.log` |
+| 中文渲染 | ✅ `文件` / `选项` / `下组` / `颜色` / `国王` / `挑战者` 均为实际字形，**无方框** | `build/shot.png` |
+| `winprobe.c`（MinGW gcc） | ✅ 编译通过（`build/winprobe.exe`） | `logs/winprobe.log` |
+| 黑盒管线 `simulate.py` → `analyze.py shot` | ✅ 模拟图 1024×768，`centred` delta `+0/+0`，7 种颜色全部识别 | `shot/conformance_shot.json` |
+| `checklist.py summary/check`（UTF-8） | ✅ 54 项正常加载，`all items consistent` | `logs/checklist-summary.log` |
+
+- [x] Windows 上 `cargo test --release --workspace --all-features` 全绿
+- [x] Windows 上 `make PYTHON=... CC=gcc test` → `RESULT: ALL MATCH`
+- [x] Windows 上 `make shot` 出图正常（中文不显示方框 → 系统 CJK 字体会被正确找到）
+- [x] `rowline-shot` 在 Windows 上跑通（CJK 优先命中 `msyh`，拉丁回退 `Arial`）
+- [x] `winprobe.exe` 可在 Windows 上编译
+- [x] 黑盒工具链（`simulate.py` / `analyze.py` / `checklist.py`）在 Windows 上跑通
+
+### 9.2 仍待完成（需要原作或真实显示器）
+
+- [ ] 原作与重构版**并排对拍**记录（本仓库不含 `WinLinez.EXE`，需在沙箱内提供）
+- [ ] 125% / 150% / 200% 三档 DPI 截图留档
+- [ ] 54 项黑盒采集回填（`blackbox/checklist.json` 当前 0/54）
+
+复跑命令：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\win\verify.ps1
+```
+
+它会新建 `blackbox/windows_verify/<时间戳>/`，并在最后打印 `N/N checks passed`。

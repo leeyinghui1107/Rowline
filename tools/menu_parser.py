@@ -140,5 +140,6 @@ if __name__ == "__main__":
             print(f"  cmd={f['id']:<6} {ini_map[f['id']]:<20} label={f['label']!r}")
 
     json.dump({"tree": tree, "accels": accels, "flatten": flat},
-              open("/tmp/wl_res/menu.json", "w"), ensure_ascii=False, indent=1)
+              open("/tmp/wl_res/menu.json", "w", encoding="utf-8"),
+              ensure_ascii=False, indent=1)
     print("\nwrote /tmp/wl_res/menu.json")

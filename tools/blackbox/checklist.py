@@ -86,7 +86,8 @@ STATUS = ["todo", "in-progress", "blocked", "done", "failed"]
 
 def load():
     if os.path.exists(STORE):
-        return json.load(open(STORE))
+        with open(STORE, encoding="utf-8") as fh:
+            return json.load(fh)
     return {"version": 1, "items": {
         i: {"status": "todo", "evidence": [], "notes": "", "owner": "",
             "group": g, "title": t, "method": m, "criteria": c}
@@ -95,7 +96,8 @@ def load():
 
 def save(data):
     os.makedirs(os.path.dirname(STORE), exist_ok=True)
-    json.dump(data, open(STORE, "w"), ensure_ascii=False, indent=1)
+    with open(STORE, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, ensure_ascii=False, indent=1)
 
 
 def cmd_list(a):

@@ -1,0 +1,68 @@
+﻿{
+    "generated_at":  "2026-10-21T15:21:11.9126183+08:00",
+    "repo":  "D:\\source\\09_my\\Rowline",
+    "ok":  true,
+    "passed":  8,
+    "total":  8,
+    "versions":  {
+                     "python":  "Python 3.14.7",
+                     "cargo":  "cargo 1.99.1 (5f94df478 2026-08-27)",
+                     "rustc":  "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+                     "cc":  "gcc.exe (Rev5, Built by MSYS2 project) 16.1.0",
+                     "make":  "GNU Make 4.4.1",
+                     "os":  "Microsoft Windows NT 10.0.26200.0",
+                     "host":  "THOMAS_MAGIC",
+                     "rustup_home":  "D:\\rustup",
+                     "cargo_home":  "D:\\cargo"
+                 },
+    "checks":  [
+                   {
+                       "name":  "cargo build --release --workspace --all-features",
+                       "ok":  true,
+                       "detail":  "exit=0      Finished `release` profile [optimized] target(s) in 0.12s",
+                       "log":  "blackbox\\windows_verify\\20261021-150638\\logs\\cargo-build.log"
+                   },
+                   {
+                       "name":  "cargo test --release --workspace --all-features",
+                       "ok":  true,
+                       "detail":  "exit=0     Doc-tests rowline_render |    Doc-tests rowline_storage |    Doc-tests rowline_theme",
+                       "log":  "blackbox\\windows_verify\\20261021-150638\\logs\\cargo-test.log"
+                   },
+                   {
+                       "name":  "make test (layout gate + four-way differential gate)",
+                       "ok":  true,
+                       "detail":  "exit=0    OK   rust-implementation  matches python-reference |   OK   golden               matches python-reference | RESULT: ALL MATCH",
+                       "log":  "blackbox\\windows_verify\\20261021-150638\\logs\\make-test.log"
+                   },
+                   {
+                       "name":  "make shot (offline render)",
+                       "ok":  true,
+                       "detail":  "exit=0  rust/target/release/rowline-shot.exe --out build/shot.png --width 1280 --height 900 | wrote build/shot.png (1280x900) | \"wrote build/shot.png\"",
+                       "log":  "blackbox\\windows_verify\\20261021-150638\\logs\\make-shot.log"
+                   },
+                   {
+                       "name":  "build/shot.png is a non-trivial 1280x900 PNG",
+                       "ok":  true,
+                       "detail":  "1280x900, 47260 bytes",
+                       "log":  null
+                   },
+                   {
+                       "name":  "winprobe.c compiles",
+                       "ok":  true,
+                       "detail":  "exit=0  -\u003e D:\\source\\09_my\\Rowline\\build\\winprobe.exe",
+                       "log":  "blackbox\\windows_verify\\20261021-150638\\logs\\winprobe.log"
+                   },
+                   {
+                       "name":  "black-box simulator matches the centred layout",
+                       "ok":  true,
+                       "detail":  "centred delta=dx +0, dy +0; colours=7",
+                       "log":  "blackbox\\windows_verify\\20261021-150638\\logs\\analyze-shot.log"
+                   },
+                   {
+                       "name":  "checklist.py loads and is consistent",
+                       "ok":  true,
+                       "detail":  "summary exit=0, check exit=0",
+                       "log":  "blackbox\\windows_verify\\20261021-150638\\logs\\checklist-summary.log"
+                   }
+               ]
+}

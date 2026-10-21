@@ -81,7 +81,7 @@ def compare(trace_path, golden_path=None, verbose=False):
                     "<error: %s>" % rerr if rerr else r_out))
 
     if golden_path and os.path.exists(golden_path):
-        results.append(("golden", open(golden_path).read().strip()))
+        results.append(("golden", open(golden_path, encoding="utf-8").read().strip()))
 
     ok = True
     report = []
@@ -122,7 +122,7 @@ def main():
         for t in traces:
             g = golden if (a.record and len(traces) == 1) else os.path.splitext(t)[0] + ".golden"
             seed, board, ops = M.load_trace(t)
-            open(g, "w").write(run_python(seed, board, ops) + "\n")
+            open(g, "w", encoding="utf-8").write(run_python(seed, board, ops) + "\n")
             print("recorded golden -> %s" % g)
         return 0
 
@@ -133,7 +133,7 @@ def main():
             golden = os.path.splitext(t)[0] + ".golden"
         if a.record is not None:
             seed, board, ops = M.load_trace(t)
-            open(golden, "w").write(run_python(seed, board, ops) + "\n")
+            open(golden, "w", encoding="utf-8").write(run_python(seed, board, ops) + "\n")
             print("recorded golden -> %s" % golden)
             continue
         print("=== %s" % os.path.relpath(t, ROOT))

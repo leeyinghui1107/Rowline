@@ -107,7 +107,7 @@ bundles are produced per platform by running this script on that platform
             if f.endswith(".bmp"):
                 os.remove(os.path.join(sheet, f))
 
-    with open(os.path.join(bundle, "README.txt"), "w") as fh:
+    with open(os.path.join(bundle, "README.txt"), "w", encoding="utf-8") as fh:
         fh.write(README)
 
     print("bundle ready: %s" % bundle)

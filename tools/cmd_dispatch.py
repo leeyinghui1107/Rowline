@@ -18,7 +18,7 @@ from capstone import Cs, CS_ARCH_X86, CS_MODE_32
 pe = PE()
 md = Cs(CS_ARCH_X86, CS_MODE_32)
 
-MENU = json.load(open("/tmp/wl_res/menu.json"))
+MENU = json.load(open("/tmp/wl_res/menu.json", encoding="utf-8"))
 ACC = {a["cmd"]: a["key"] for a in MENU["accels"]}
 LABEL = {f["id"]: f["label"] for f in MENU["flatten"] if f["id"]}
 

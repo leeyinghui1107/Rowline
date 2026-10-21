@@ -142,7 +142,7 @@ def write_mock_config(path, seed):
         ],
     }
     os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
-    json.dump(doc, open(path, "w"), indent=1)
+    json.dump(doc, open(path, "w", encoding="utf-8"), indent=1)
 
 
 if __name__ == "__main__":

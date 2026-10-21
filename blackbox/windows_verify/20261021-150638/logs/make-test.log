@@ -1,0 +1,137 @@
+build/rowline-layout-check.exe
+=== M1 layout acceptance (C reference) ===
+minimum client size that fits every region: 328x328
+
+--- 640x480 (at/above minimum) ---
+
+client 640x480
+  board origin  = (156, 124)   frame = 327x328
+  left figure   = 50
+  right figure  = 532
+  OK   board origin inside the client rect
+  OK   board frame fits horizontally (156 + 327 <= 640)
+  OK   board frame fits vertically (124 + 328 <= 480)
+  OK   the left figure fits
+  OK   the right figure fits
+  OK   the left figure does not overlap the board
+  OK   the right figure does not overlap the board
+  OK   cell size is 36 px
+  OK   the board is centred horizontally (delta 1)
+  OK   all 81 cells map to distinct in-bounds rects and round-trip
+  OK   a point outside the board is rejected
+
+--- 800x600 (at/above minimum) ---
+
+client 800x600
+  board origin  = (236, 184)   frame = 327x328
+  left figure   = 90
+  right figure  = 652
+  OK   board origin inside the client rect
+  OK   board frame fits horizontally (236 + 327 <= 800)
+  OK   board frame fits vertically (184 + 328 <= 600)
+  OK   the left figure fits
+  OK   the right figure fits
+  OK   the left figure does not overlap the board
+  OK   the right figure does not overlap the board
+  OK   cell size is 36 px
+  OK   the board is centred horizontally (delta 1)
+  OK   all 81 cells map to distinct in-bounds rects and round-trip
+  OK   a point outside the board is rejected
+
+--- 1024x768 (at/above minimum) ---
+
+client 1024x768
+  board origin  = (348, 268)   frame = 327x328
+  left figure   = 146
+  right figure  = 820
+  OK   board origin inside the client rect
+  OK   board frame fits horizontally (348 + 327 <= 1024)
+  OK   board frame fits vertically (268 + 328 <= 768)
+  OK   the left figure fits
+  OK   the right figure fits
+  OK   the left figure does not overlap the board
+  OK   the right figure does not overlap the board
+  OK   cell size is 36 px
+  OK   the board is centred horizontally (delta 1)
+  OK   all 81 cells map to distinct in-bounds rects and round-trip
+  OK   a point outside the board is rejected
+
+--- 1280x800 (at/above minimum) ---
+
+client 1280x800
+  board origin  = (476, 284)   frame = 327x328
+  left figure   = 210
+  right figure  = 1012
+  OK   board origin inside the client rect
+  OK   board frame fits horizontally (476 + 327 <= 1280)
+  OK   board frame fits vertically (284 + 328 <= 800)
+  OK   the left figure fits
+  OK   the right figure fits
+  OK   the left figure does not overlap the board
+  OK   the right figure does not overlap the board
+  OK   cell size is 36 px
+  OK   the board is centred horizontally (delta 1)
+  OK   all 81 cells map to distinct in-bounds rects and round-trip
+  OK   a point outside the board is rejected
+
+--- 1440x900 (at/above minimum) ---
+
+client 1440x900
+  board origin  = (556, 334)   frame = 327x328
+  left figure   = 250
+  right figure  = 1132
+  OK   board origin inside the client rect
+  OK   board frame fits horizontally (556 + 327 <= 1440)
+  OK   board frame fits vertically (334 + 328 <= 900)
+  OK   the left figure fits
+  OK   the right figure fits
+  OK   the left figure does not overlap the board
+  OK   the right figure does not overlap the board
+  OK   cell size is 36 px
+  OK   the board is centred horizontally (delta 1)
+  OK   all 81 cells map to distinct in-bounds rects and round-trip
+  OK   a point outside the board is rejected
+
+--- 1920x1080 (at/above minimum) ---
+
+client 1920x1080
+  board origin  = (796, 424)   frame = 327x328
+  left figure   = 370
+  right figure  = 1492
+  OK   board origin inside the client rect
+  OK   board frame fits horizontally (796 + 327 <= 1920)
+  OK   board frame fits vertically (424 + 328 <= 1080)
+  OK   the left figure fits
+  OK   the right figure fits
+  OK   the left figure does not overlap the board
+  OK   the right figure does not overlap the board
+  OK   cell size is 36 px
+  OK   the board is centred horizontally (delta 1)
+  OK   all 81 cells map to distinct in-bounds rects and round-trip
+  OK   a point outside the board is rejected
+
+PASSED (0 failure(s))
+"--- four-way differential gate (python / c / rust / golden) ---"
+"C:\Users\��Ӣ��\AppData\Local\Programs\Python\Python314\python.exe" tools/replay/diff_replay.py --all
+=== tools\replay\cases\basic_001.trace
+  OK   c-implementation     matches python-reference
+  OK   rust-implementation  matches python-reference
+  OK   golden               matches python-reference
+=== tools\replay\cases\basic_002.trace
+  OK   c-implementation     matches python-reference
+  OK   rust-implementation  matches python-reference
+  OK   golden               matches python-reference
+=== tools\replay\cases\basic_003.trace
+  OK   c-implementation     matches python-reference
+  OK   rust-implementation  matches python-reference
+  OK   golden               matches python-reference
+=== tools\replay\cases\edge_005.trace
+  OK   c-implementation     matches python-reference
+  OK   rust-implementation  matches python-reference
+  OK   golden               matches python-reference
+=== tools\replay\cases\stress_004.trace
+  OK   c-implementation     matches python-reference
+  OK   rust-implementation  matches python-reference
+  OK   golden               matches python-reference
+
+RESULT: ALL MATCH

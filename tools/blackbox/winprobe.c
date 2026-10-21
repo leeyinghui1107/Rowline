@@ -34,7 +34,7 @@ static DWORD g_pid = 0;
 static int  g_found = 0;
 static HWND g_target = NULL;
 
-static FILE *g_fw = NULL, *g_fm = NULL, *g_fc = NULL, *g_ft = NULL;
+static FILE *g_fw = NULL, *g_fm = NULL, *g_fc = NULL;
 
 /* ------------------------------------------------------------------ json */
 static void jstr(FILE *f, const char *s)
