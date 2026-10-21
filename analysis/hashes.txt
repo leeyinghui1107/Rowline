@@ -1,0 +1,6 @@
+file:    /Users/thomas/Downloads/WINLINEZ.EXE
+size:    1060352 bytes
+md5:     f350a670f23aaad667d0ada53a59f81b
+sha256:  ceb47355809538c512cb94fcdf7f5caec0f394ba6042e728522378ea8e79f6c5
+sha1:    2733c2c287a0de3d7fbdf81cd55872b5fe7d027d
+date:    Jan  6 20:37:55 2005

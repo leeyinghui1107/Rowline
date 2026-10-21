@@ -1,0 +1,47 @@
+== FILE: /Users/thomas/Downloads/WINLINEZ.EXE
+   size=1060352 bytes (1035.5 KB)
+== COFF header @0x78
+   machine=0x014C (i386)
+   sections=6  timestamp=0x384455F8 (1999-11-30T22:55:52Z)
+   characteristics=0x0182 EXECUTABLE 32BIT
+== OPTIONAL header  magic=0x010B (PE32)
+   linker version=2.18
+   entrypoint RVA=0x1000  imagebase=0x400000  EP VA=0x401000
+   subsystem=2 (GUI)  dllchars=0x0000 
+   section_align=0x1000 file_align=0x200 datadirs=16
+== DATA DIRECTORIES
+   IMPORT         RVA=0x00009000 size=0xA0 (160)
+   RESOURCE       RVA=0x0000D000 size=0xFA200 (1024512)
+== SECTIONS
+   AUTO      VA=0x00001000 VSize=0x0008000 Raw=0x0000400 RawSz=0x0007400 -RW entropy=6.32  IDATA READ WRITE
+   .idata    VA=0x00009000 VSize=0x0001000 Raw=0x0007800 RawSz=0x0000E00 -RW entropy=4.67  IDATA READ WRITE
+   .data     VA=0x0000A000 VSize=0x0001000 Raw=0x0008600 RawSz=0x0000600 -RW entropy=4.54  IDATA READ WRITE
+   .bss      VA=0x0000B000 VSize=0x0000600 Raw=0x0000000 RawSz=0x0000600 -RW entropy=3.60  IDATA READ WRITE
+   .reloc    VA=0x0000C000 VSize=0x0001000 Raw=0x0008C00 RawSz=0x0000000 -RW entropy=0.00  IDATA READ WRITE
+   .rsrc     VA=0x0000D000 VSize=0x00FA200 Raw=0x0008C00 RawSz=0x00FA200 -RW entropy=3.10  IDATA READ WRITE
+== OVERLAY: none
+== IMPORTS
+   SHELL32.dll  (1 funcs)
+      ShellExecuteA
+   ADVAPI32.dll  (4 funcs)
+      RegCloseKey, RegCreateKeyA, RegQueryValueExA, RegSetValueExA
+   USER32.DLL  (1 funcs)
+      wsprintfA
+   KERNEL32.dll  (14 funcs)
+      FindResourceA, FreeResource, GetModuleFileNameA, GetPrivateProfileIntA, GetTickCount, GlobalAlloc, GlobalFree, LoadResource, LocalAlloc, LocalFree, LockResource, MulDiv, Sleep, WritePrivateProfileStringA
+   GDI32.dll  (28 funcs)
+      BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreateDCA, CreateDIBitmap, CreateFontA, CreateFontIndirectA, CreatePalette, CreatePen, CreateRectRgn, CreateSolidBrush, DeleteDC, DeleteObject, GetObjectA, GetPixel, GetStockObject, GetTextExtentPoint32A, LineTo, MoveToEx, RealizePalette, SelectClipRgn, SelectObject, SelectPalette, SetBkColor, SetBkMode, SetPixel, SetTextColor, TextOutA
+   USER32.dll  (70 funcs)
+      BeginPaint, CheckMenuItem, CopyRect, CreateDialogParamA, CreateWindowExA, DefDlgProcA, DefWindowProcA, DestroyIcon, DestroyWindow, DialogBoxParamA, DispatchMessageA, DrawEdge, DrawFrameControl, DrawIconEx, DrawStateA, DrawTextA, EndDialog, EndPaint, FillRect, GetActiveWindow, GetClassLongA, GetClientRect, GetCursorPos, GetDC, GetDlgItem, GetDlgItemTextA, GetForegroundWindow, GetMenu, GetMenuState, GetMessageA, GetMessageTime, GetParent, GetSysColor, GetSystemMetrics, GetWindowDC, GetWindowLongA, GetWindowPlacement, GetWindowRect, GetWindowTextA, InflateRect, InvalidateRect, IsDialogMessageA, IsIconic, IsRectEmpty, KillTimer, LoadAcceleratorsA, LoadCursorA, LoadIconA, LoadImageA, MessageBeep, MessageBoxA, OffsetRect, PostMessageA, PostQuitMessage, RegisterClassA, ReleaseCapture, ReleaseDC, SendMessageA, SetCapture, SetDlgItemTextA, SetFocus, SetTimer, SetWindowLongA, SetWindowPos, ShowWindow, SystemParametersInfoA, TranslateAcceleratorA, TranslateMessage, UpdateWindow, WinHelpA
+   KERNEL32.DLL  (3 funcs)
+      ExitProcess, GetCommandLineA, GetModuleHandleA
+== RESOURCES
+== VERSION / METADATA scan
+   VS_VERSION_INFO: -
+   FileDescription: -
+   CompanyName: -
+   ProductName: -
+   OriginalFilename: -
+   InternalName: -
+   LegalCopyright: -
+   FileVersion: -

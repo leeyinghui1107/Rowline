@@ -1,0 +1,39 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/display",
+    "crates/theme",
+    "crates/storage",
+    "crates/platform",
+    "crates/render",
+    "crates/assets",
+    "crates/app",
+    "crates/tools",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT OR Apache-2.0"
+authors = ["Rowline contributors"]
+
+[workspace.dependencies]
+rowline-core = { path = "crates/core" }
+rowline-display = { path = "crates/display" }
+rowline-theme = { path = "crates/theme" }
+rowline-storage = { path = "crates/storage" }
+rowline-platform = { path = "crates/platform" }
+rowline-render = { path = "crates/render" }
+rowline-assets = { path = "crates/assets" }
+rowline-app = { path = "crates/app" }
+
+# The core crate has NO external dependencies on purpose:
+#   * the differential replay gate must stay hermetic and reproducible
+#   * the logic must be portable to no_std and to embedded targets later
+#   * the behaviour spec (docs/03_FEATURE_SPEC.md) is the only contract
+[profile.release]
+opt-level = 3
+lto = true
+panic = "abort"

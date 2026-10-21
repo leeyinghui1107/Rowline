@@ -1,0 +1,37 @@
+=== RT_MENU (RT_MENU / MENUITEMTEMPLATE, Borland framing) ===
+    resource size = 276 bytes, consumed = 276 bytes -> EXACT
+
+[POPUP] id=-            label='文件(&F)'
+  [ITEM ] id=256          key=F4       label='新建(&N)\t  F4'
+  [ITEM ] id=257          key=         label='显示高分榜(&H)'
+  [ITEM ] id=258          key=Alt+F9   label='退出(&X)\t  Alt-X'
+  [POPUP] id=-            label='选项(&O)'
+    [ITEM ] id=512          key=F3       label='下一组(&N)\tF3'
+    [ITEM ] id=513          key=F5       label='显示统计(&S)\tF5'
+    [ITEM ] id=514          key=F6       label='使用形状\x08F6'
+    [ITEM ] id=16528        key=         label='帮助(&H)'
+    [ITEM ] id=768          key=F1       label='内容(&C)\x08F1'
+    [ITEM ] id=769          key=         label='关于(&A)...'
+    [ITEM ] id=46           key=         label=''
+
+=== 交叉校验：菜单 ID vs 加速键表 ===
+  OK cmd=768    key=F1       -> '内容(&C)\x08F1'
+  OK cmd=512    key=F3       -> '下一组(&N)\tF3'
+  OK cmd=256    key=F4       -> '新建(&N)\t  F4'
+  OK cmd=513    key=F5       -> '显示统计(&S)\tF5'
+  OK cmd=514    key=F6       -> '使用形状\x08F6'
+  OK cmd=258    key=Alt+F9   -> '退出(&X)\t  Alt-X'
+
+  结果: 全部加速键均在菜单中找到对应项
+
+=== INI 键 <-> 菜单 ID 映射（用于行为规格）===
+  cmd=256    (New game)           label='新建(&N)\t  F4'
+  cmd=257    (High score list)    label='显示高分榜(&H)'
+  cmd=258    (Exit)               label='退出(&X)\t  Alt-X'
+  cmd=512    ShowNext             label='下一组(&N)\tF3'
+  cmd=513    ShowStatistics       label='显示统计(&S)\tF5'
+  cmd=514    UseFigures           label='使用形状\x08F6'
+  cmd=768    (Contents/help)      label='内容(&C)\x08F1'
+  cmd=769    (About)              label='关于(&A)...'
+
+wrote /tmp/wl_res/menu.json

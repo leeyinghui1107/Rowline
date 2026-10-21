@@ -1,0 +1,6 @@
+BITMAP_1111_0: 576x586 bpp=24 comp=0 pal=0 imgsz=1012608 -> /tmp/wl_png/BITMAP_1111_0.png
+BITMAP_2000_0: 67x50 bpp=4 comp=0 pal=6 imgsz=1800 -> /tmp/wl_png/BITMAP_2000_0.png
+BITMAP_2001_0: 67x50 bpp=1 comp=0 pal=2 imgsz=600 -> /tmp/wl_png/BITMAP_2001_0.png
+BITMAP_4000_0: 42x21 bpp=8 comp=0 pal=34 imgsz=924 -> /tmp/wl_png/BITMAP_4000_0.png
+BITMAP_4001_0: 90x24 bpp=8 comp=0 pal=77 imgsz=2208 -> /tmp/wl_png/BITMAP_4001_0.png
+BITMAP_4002_0: 42x21 bpp=8 comp=0 pal=179 imgsz=924 -> /tmp/wl_png/BITMAP_4002_0.png

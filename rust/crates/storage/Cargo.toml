@@ -1,0 +1,19 @@
+[package]
+name = "rowline-storage"
+description = "Persistence: RON save files, the legacy importer and the on-disk store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+rowline-core = { path = "../core", features = ["serde"] }
+rowline-platform = { path = "../platform" }
+ron = "0.12"
+serde = { version = "1", features = ["derive"] }
+
+[features]
+default = []
+# Write to the real file system instead of the in-memory one.
+fs = ["rowline-platform/fs"]

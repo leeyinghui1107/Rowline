@@ -1,0 +1,14 @@
+[package]
+name = "rowline-theme"
+description = "Design tokens for Rowline: palettes, spacing, typography, motion, accessibility"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+rowline-core.workspace = true
+
+[features]
+default = []

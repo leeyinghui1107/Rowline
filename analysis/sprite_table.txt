@@ -1,0 +1,27 @@
+atlas 576x586; ball grid 16x10, cell 36px, FILE origin (0,0) (bottom-up)
+
+ file-row 0: #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       YELLOW:sphere    RED:sphere       #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       YELLOW:square    MAROON:sphere   
+ file-row 1: #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       YELLOW:sphere    RED:sphere       #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       YELLOW:sphere    MAROON:sphere   
+ file-row 2: #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       YELLOW:sphere    RED:sphere       #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       YELLOW:sphere    MAROON:sphere   
+ file-row 3: #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       YELLOW:sphere    RED:sphere       #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       YELLOW:sphere    MAROON:sphere   
+ file-row 4: #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       YELLOW:sphere    RED:sphere       #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       YELLOW:sphere    MAROON:sphere   
+ file-row 5: #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       YELLOW:sphere    RED:sphere       #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       MAROON:sphere    MAROON:sphere   
+ file-row 6: #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       YELLOW:sphere    RED:sphere       #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       YELLOW:square    MAROON:sphere   
+ file-row 7: #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       YELLOW:sphere    RED:sphere       #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       MAROON:sphere    MAROON:sphere   
+ file-row 8: #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       YELLOW:sphere    RED:sphere       #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       YELLOW:sphere    MAROON:sphere   
+ file-row 9: #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       YELLOW:sphere    RED:sphere       #C0C0C0:empty    GREEN:sphere     BLUE:sphere      CYAN:sphere      MAGENTA:sphere   RED:sphere       MAROON:sphere    MAROON:sphere   
+
+--- cell summary ---
+   RED:sphere         x30
+   #C0C0C0:empty      x20
+   GREEN:sphere       x20
+   BLUE:sphere        x20
+   CYAN:sphere        x20
+   MAGENTA:sphere     x20
+   YELLOW:sphere      x15
+   MAROON:sphere      x13
+   YELLOW:square      x2
+
+--- separator / background rows (full-width gray) ---
+
+wrote /tmp/wl_png/sprite_table.json

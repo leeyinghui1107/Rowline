@@ -1,0 +1,77 @@
+
+========================================================================
+### func 0x401CD4  Game_EvaluateLine
+========================================================================
+-- Win32/internal calls --
+   0x401CE4  sub_0x401ca1
+   0x401CF4  sub_0x401100
+   0x401D5F  USER32.dll!MessageBoxA
+   0x401D99  sub_0x401100
+   0x401DB0  sub_0x401698
+   0x401DB7  KERNEL32.dll!Sleep
+   0x401DC9  sub_0x401698
+   0x401DD0  KERNEL32.dll!Sleep
+   0x401DDF  sub_0x401698
+   0x401DF3  sub_0x401a4a
+   0x401DFE  sub_0x401bd4
+   0x401E4D  GDI32.dll!SelectObject
+   0x401E60  GDI32.dll!MoveToEx
+   0x401E6A  GDI32.dll!LineTo
+   0x401E74  GDI32.dll!LineTo
+   0x401E81  GDI32.dll!SelectObject
+   0x401E92  GDI32.dll!MoveToEx
+   0x401EA0  GDI32.dll!LineTo
+   0x401EAA  GDI32.dll!LineTo
+   0x401EB6  GDI32.dll!SelectObject
+-- key constants --
+-- global refs --
+   0x401D72  0x40B2E8
+   0x401D80  0x40B2E9
+   0x401D85  0x40B2E8
+   0x401D8A  0x40B2EA
+   0x401D8F  0x40B2E9
+   0x401DA0  0x40B2EA
+
+========================================================================
+### func 0x401A4A  GameRules_ValidateMove
+========================================================================
+-- Win32/internal calls --
+-- key constants --
+-- global refs --
+
+========================================================================
+### func 0x401743  Board_InitNewGame
+========================================================================
+-- Win32/internal calls --
+-- key constants --
+-- global refs --
+   0x4018CF  0x40B3EA
+   0x401954  0x40B3EA
+
+========================================================================
+### func 0x402134  MenuAction_Dispatch
+========================================================================
+-- Win32/internal calls --
+   0x402142  USER32.dll!GetClientRect
+   0x402156  USER32.dll!GetSysColor
+   0x40215E  GDI32.dll!CreateSolidBrush
+   0x402170  USER32.dll!FillRect
+   0x402179  USER32.dll!GetSysColor
+   0x402185  GDI32.dll!CreatePen
+   0x402190  USER32.dll!GetSysColor
+   0x40219C  GDI32.dll!CreatePen
+   0x4021A7  GDI32.dll!SelectObject
+   0x4021B9  GDI32.dll!MoveToEx
+   0x4021C9  GDI32.dll!LineTo
+   0x4021D2  GDI32.dll!SelectObject
+   0x4021E0  GDI32.dll!MoveToEx
+   0x4021F0  GDI32.dll!LineTo
+   0x4021F9  GDI32.dll!SelectObject
+   0x402207  GDI32.dll!MoveToEx
+   0x402217  GDI32.dll!LineTo
+   0x402220  GDI32.dll!SelectObject
+   0x40222E  GDI32.dll!MoveToEx
+   0x40223E  GDI32.dll!LineTo
+   0x402247  USER32.dll!GetSysColor
+-- key constants --
+-- global refs --

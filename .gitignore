@@ -1,0 +1,26 @@
+
+# ============================================================
+# Python
+# Rust build artefacts
+# Rust workspace build artefacts
+# 仅供内部研究参考，禁止随重构产品分发。
+# 合规隔离：以下为原作 (c) 1998-1999 Ivan Golubev 的受版权保护资产，
+# 构建产物
+# 注意：assets/sheet/ 是**自制**占位美术（tools/make_sheet.py 生成），
+# 目标二进制副本
+# 索引契约与原作一致但像素完全原创，允许随产品分发。
+# 见 REPORT.md §5「法律与合规边界」
+*.EXE
+*.exe
+*.pyc
+__pycache__/
+analysis/resources_manifest.json
+assets/png/
+assets/resources/
+assets/sprite_table.json
+build/
+out/
+rust/target/
+
+# Packaging output
+dist/

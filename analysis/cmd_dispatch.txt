@@ -1,0 +1,31 @@
+=== 窗口消息分派树 @ 0x403B65（比较 msg）===
+   0x403B65  cmp edi, 0x24   -> WM_GETFONT
+   0x403B70  cmp edi, 0x201   -> WM_MOUSEMOVE
+   0x403B7A  cmp eax, 0x10   -> WM_CLOSE
+   0x403B7D  cmp eax, 0xFFFF   -> ?
+   0x403B82  cmp edi, 0x201   -> WM_MOUSEMOVE
+   0x403B8E  cmp edi, 0x202   -> WM_LBUTTONDOWN
+   0x403B9A  cmp edi, 0x900   -> WM_APP_USER
+   0x403BA8  cmp edi, 0x111   -> WM_COMMAND
+   0x403BB6  cmp edi, 0x113   -> WM_TIMER
+   0x403BC4  cmp edi, 0x5   -> ?
+   0x403BCF  cmp edi, 0xF   -> WM_PAINT
+   0x403BDA  cmp edi, 0x10   -> WM_CLOSE
+   0x403BE5  cmp edi, 0x1   -> ?
+   0x403BF0  cmp edi, 0x2   -> WM_DESTROY
+   分支目标: 0x402DF1, 0x402FA0, 0x40305E, 0x40308E, 0x403369, 0x4033DD, 0x40366D, 0x4036D5, 0x4036E8, 0x4037EC, 0x403BA8, 0x403BC4, 0x403BE5, 0x403BF9
+
+=== WM_COMMAND 命令分派树 @ 0x40366D（比较 LOWORD(wParam)）===
+   0x403674  cmp ax, 0x200   -> cmd 512    key=F3       '下一组(&N)\tF3'
+   0x403680  cmp ax, 0x202   -> cmd 514    key=F6       '使用形状\x08F6'
+   0x403690  cmp ax, 0x300   -> cmd 768    key=F1       '内容(&C)\x08F1'
+   0x4036A0  cmp ax, 0x301   -> cmd 769    key=         '关于(&A)...'
+   0x4036AB  cmp ax, 0x101   -> cmd 257    key=         '显示高分榜(&H)'
+   0x4036B7  cmp ax, 0x102   -> cmd 258    key=Alt+F9   '退出(&X)\t  Alt-X'
+   0x4036C6  cmp ax, 0x100   -> cmd 256    key=F4       '新建(&N)\t  F4'
+   分支目标: 0x40304F, 0x40346E, 0x403496, 0x4034E0, 0x40352C, 0x40359E, 0x403606, 0x40364D, 0x4036AB, 0x4036C6
+
+=== 菜单 ID ↔ INI 键 交叉验证 ===
+   cmd=512   INI ShowNext           key=F3     label='下一组(&N)\tF3'
+   cmd=513   INI ShowStatistics     key=F5     label='显示统计(&S)\tF5'
+   cmd=514   INI UseFigures         key=F6     label='使用形状\x08F6'

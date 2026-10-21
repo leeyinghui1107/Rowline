@@ -1,0 +1,53 @@
+[package]
+name = "rowline-render"
+description = "Rendering abstraction and backends (wgpu / softbuffer)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+rowline-core.workspace = true
+rowline-assets.workspace = true
+ab_glyph = { version = "0.2", optional = true }
+image = { version = "0.25", optional = true, default-features = false }
+
+[features]
+default = []
+# GPU backend.  wgpu 30 supports Vulkan / Metal / DX12 / GL, i.e. every
+# desktop platform plus the web.
+wgpu = ["dep:wgpu", "dep:pollster", "dep:bytemuck", "dep:glam"]
+# Pure-software backend: no GPU driver needed, works everywhere, slower.
+softbuffer = ["dep:softbuffer", "image", "dep:raw-window-handle"]
+# The CPU rasteriser, used by the offline screenshot tool as well.
+image = ["dep:image"]
+# Deterministic text rendering for the software backend.
+text = ["dep:ab_glyph", "image"]
+
+[dependencies.wgpu]
+version = "30"
+optional = true
+default-features = false
+features = ["wgsl", "dx12", "metal", "vulkan", "gles"]
+
+[dependencies.pollster]
+version = "1"
+optional = true
+
+[dependencies.bytemuck]
+version = "1"
+optional = true
+features = ["derive"]
+
+[dependencies.glam]
+version = "0.34"
+optional = true
+
+[dependencies.softbuffer]
+version = "0.4"
+optional = true
+
+[dependencies.raw-window-handle]
+version = "0.6"
+optional = true

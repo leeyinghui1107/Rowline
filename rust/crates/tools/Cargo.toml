@@ -1,0 +1,32 @@
+[package]
+name = "rowline-tools"
+description = "Command line tools for the Rowline re-implementation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+rowline-core.workspace = true
+rowline-display.workspace = true
+rowline-storage.workspace = true
+rowline-app.workspace = true
+rowline-assets.workspace = true
+rowline-render = { path = "../render", features = ["image", "text"] }
+image = { version = "0.25", default-features = false }
+winit = { version = "0.30", optional = true, default-features = false,
+          features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }
+
+[[bin]]
+name = "rowline-shot"
+path = "src/bin/rowline-shot.rs"
+
+[[bin]]
+name = "rowline-dpi-probe"
+path = "src/bin/rowline-dpi-probe.rs"
+required-features = ["dpi"]
+
+[features]
+default = []
+dpi = ["dep:winit"]

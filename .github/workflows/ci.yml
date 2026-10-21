@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust (build + test)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Format
+        working-directory: rust
+        run: cargo fmt --check
+      - name: Clippy
+        working-directory: rust
+        run: cargo clippy --workspace --all-features -- -D warnings
+      - name: Test (default features)
+        working-directory: rust
+        run: cargo test --workspace --all-features
+      - name: Test (no graphics dependencies)
+        working-directory: rust
+        run: cargo build --workspace --no-default-features
+
+  reference-c:
+    name: C reference implementation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          cc -std=c99 -O2 -Wall -Wextra -Wno-unused-parameter \
+             -Ireference/c-impl -o build/rowline-replay \
+             reference/c-impl/wl_model.c reference/c-impl/wl_replay.c
+          cc -std=c99 -O2 -Wall -Wextra -Wno-unused-parameter \
+             -Ireference/c-impl -o build/rowline-layout-check \
+             reference/c-impl/wl_model.c reference/c-impl/wl_layout.c \
+             reference/c-impl/wl_layout_check.c
+      - name: Layout gate
+        run: ./build/rowline-layout-check
+
+  differential:
+    name: Differential replay gate (python / c / rust)
+    runs-on: ubuntu-latest
+    needs: [rust, reference-c]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Build the Rust replay tool
+        working-directory: rust
+        run: cargo build --release -p rowline-tools
+      - name: Build the C replay tool
+        run: |
+          mkdir -p build
+          cc -std=c99 -O2 -Wall -Wextra -Wno-unused-parameter \
+             -Ireference/c-impl -o build/rowline-replay \
+             reference/c-impl/wl_model.c reference/c-impl/wl_replay.c
+      - name: Run the gate
+        run: python3 tools/replay/diff_replay.py --all
+
+  visual:
+    name: Offline render smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build the screenshot tool
+        working-directory: rust
+        run: cargo build --release -p rowline-tools
+      - name: Render a frame without a GPU
+        run: |
+          ./rust/target/release/rowline-shot --out shot.png --width 1280 --height 900
+          ./rust/target/release/rowline-shot --out light.png --theme light \
+              --scenario scoreboard
+          test -s shot.png
+          test -s light.png
+
+  assets:
+    name: Assets are reproducible
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Regenerate the placeholder art
+        run: |
+          python3 tools/make_sheet.py
+          python3 tools/make_icons.py
+      - name: The generated art must not change
+        run: |
+          git diff --exit-code -- assets/sheet assets/icons assets/noise

@@ -1,0 +1,172 @@
+=== 全局变量读写点（按所属函数分组）===
+
+  func 0x401100  
+      rngState                     x2   @ 0x401102, 0x401112
+
+  func 0x40112D  
+      rngState                     x1   @ 0x40112D
+
+  func 0x401133  
+      hInstance                    x1   @ 0x40113E
+      boardOriginX                 x1   @ 0x401332
+      boardOriginY                 x1   @ 0x40134D
+      figuresModeFlag              x2   @ 0x4012E0, 0x4013C4
+      statusHwnd                   x2   @ 0x401432, 0x401496
+      cheatFlag                    x3   @ 0x4012FD, 0x4013EC, 0x401414
+      mainHwnd                     x1   @ 0x4013AD
+      spriteSetToggle(0=sphere,1=poly) x3   @ 0x4011D3, 0x40131A, 0x401437
+
+  func 0x401533  
+      boardOriginX                 x6   @ 0x401565, 0x40157F, 0x401599, 0x4015C5, 0x4015DE, 0x401668
+      boardOriginY                 x6   @ 0x40155A, 0x401574, 0x401592, 0x4015BE, 0x4015D3, 0x401652
+      atlasDC                      x1   @ 0x401647
+      board[81] (9x9 cells)        x1   @ 0x401623
+      spriteSetToggle(0=sphere,1=poly) x1   @ 0x401634
+
+  func 0x401698  
+      boardOriginX                 x1   @ 0x401705
+      boardOriginY                 x1   @ 0x4016EF
+      atlasDC                      x1   @ 0x4016E4
+      board[81] (9x9 cells)        x1   @ 0x4016BA
+      spriteSetToggle(0=sphere,1=poly) x1   @ 0x4016D1
+
+  func 0x401743  
+      board[81] (9x9 cells)        x16  @ 0x40176E, 0x401777, 0x40179C, 0x4017B5, 0x4017C2, 0x4017F9, 0x401806, 0x40184F
+
+  func 0x4019FF  
+      boardOriginX                 x1   @ 0x401A03
+      boardOriginY                 x1   @ 0x401A27
+
+  func 0x401A4A  
+      board[81] (9x9 cells)        x7   @ 0x401A65, 0x401A9B, 0x401AB6, 0x401AEC, 0x401B16, 0x401B59, 0x401BC2
+
+  func 0x401BD4  
+      statusHwnd                   x1   @ 0x401C81
+      board[81] (9x9 cells)        x2   @ 0x401C0B, 0x401C23
+
+  func 0x401CA1  
+      board[81] (9x9 cells)        x1   @ 0x401CC1
+
+  func 0x401CD4  
+      board[81] (9x9 cells)        x5   @ 0x401D17, 0x401D2C, 0x401D3E, 0x401D7A, 0x401DE9
+
+  func 0x401EC6  
+      boardOriginX_calc            x4   @ 0x401F1C, 0x401F6C, 0x401FBD, 0x401FFA
+      connectThreshold(5)          x4   @ 0x401F15, 0x401F65, 0x401FB6, 0x401FE9
+      figuresModeFlag              x1   @ 0x401ECE
+      atlasDC                      x4   @ 0x401F0A, 0x401F5A, 0x401FAC, 0x401FDE
+      spriteSetToggle(0=sphere,1=poly) x3   @ 0x401EF7, 0x401F47, 0x401F99
+
+  func 0x402134  
+      boardOriginX_calc            x4   @ 0x402261, 0x40226D, 0x4022DC, 0x4022E7
+      menuCmdRoute                 x1   @ 0x402342
+
+  func 0x40238B  
+      boardOriginX                 x1   @ 0x40243B
+      panelHalfWidth               x5   @ 0x4023BC, 0x4023FB, 0x40240C, 0x402417, 0x4024D0
+      boardOriginY_calc            x5   @ 0x4023B3, 0x4023EE, 0x402423, 0x40242F, 0x4024BF
+      stateFlags0                  x2   @ 0x4023E3, 0x4024C9
+      stateFlags1                  x1   @ 0x4024A0
+      atlasDC                      x3   @ 0x4023A8, 0x4023D7, 0x4024B4
+
+  func 0x4024E7  
+      panelOriginX                 x6   @ 0x402518, 0x402557, 0x402568, 0x402573, 0x40260D, 0x402667
+      panelOriginY                 x6   @ 0x40250F, 0x40254A, 0x40257F, 0x40258B, 0x4025FC, 0x402653
+      panelWidth(125)              x3   @ 0x40253F, 0x402606, 0x40265D
+      stateFlags2                  x3   @ 0x4025DB, 0x40261E, 0x402630
+      atlasDC                      x4   @ 0x402504, 0x402533, 0x4025F1, 0x402648
+
+  func 0x402680  
+      currentScore                 x5   @ 0x402687, 0x40268F, 0x4026AF, 0x40270F, 0x40276A
+      boardAreaWidth               x1   @ 0x40269B
+      boardCellCount               x1   @ 0x402695
+      menuCmdRoute                 x3   @ 0x4026B4, 0x40272E, 0x40276F
+      stateFlags0                  x2   @ 0x4026E4, 0x4026F5
+      stateFlags1                  x1   @ 0x40277D
+      panelWidth(125)              x2   @ 0x402741, 0x40274E
+      stateFlags2                  x3   @ 0x402783, 0x4027B1, 0x4027CE
+
+  func 0x402801  
+      currentScore                 x2   @ 0x402859, 0x40287C
+      boardAreaWidth               x1   @ 0x402888
+      boardCellCount               x1   @ 0x402882
+      menuCmdRoute                 x1   @ 0x402865
+      board[81] (9x9 cells)        x1   @ 0x40281C
+
+  func 0x4028A1  
+      currentScore                 x1   @ 0x4028CA
+      menuCmdRoute                 x1   @ 0x4028D0
+      stateFlags0                  x3   @ 0x402905, 0x402912, 0x40291E
+      stateFlags1                  x1   @ 0x4028E4
+      panelWidth(125)              x3   @ 0x40296B, 0x402978, 0x402983
+      stateFlags2                  x2   @ 0x402938, 0x402943
+      statusHwnd                   x1   @ 0x4029A6
+
+  func 0x402A05  
+      scoreTable[16] x 32B         x2   @ 0x402A0E, 0x402A2C
+      scoreTable[0].score          x2   @ 0x402A18, 0x402A3F
+
+  func 0x402A50  
+      menuCmdRoute                 x1   @ 0x402BDF
+      scoreTable[16] x 32B         x3   @ 0x402ABF, 0x402B27, 0x402BE4
+      scoreTable[0].score          x1   @ 0x402BDA
+      mainHwnd                     x1   @ 0x402BA6
+      wipeAcceptedFlag             x2   @ 0x402A73, 0x402BB9
+
+  func 0x402BFD  
+      scoreTable[16] x 32B         x2   @ 0x402C38, 0x402C59
+      wipeAcceptedFlag             x1   @ 0x402C03
+
+  func 0x402CB1  
+      hInstance                    x2   @ 0x402D1D, 0x402D57
+      currentScore                 x2   @ 0x402CBA, 0x402D3F
+      scoreTable[16] x 32B         x3   @ 0x402CF6, 0x402CFC, 0x402D2E
+      scoreTable[0].score          x2   @ 0x402CCC, 0x402D44
+
+  func 0x402DA2  
+      hInstance                    x5   @ 0x402E02, 0x403483, 0x403567, 0x403662, 0x404073
+      boardOriginX                 x2   @ 0x4036FC, 0x404176
+      boardOriginY                 x1   @ 0x403721
+      panelBase                    x5   @ 0x40310C, 0x403155, 0x403179, 0x4031A7, 0x4033BF
+      panelFlags                   x5   @ 0x403118, 0x40314D, 0x403185, 0x403197, 0x4033B7
+      currentScore                 x4   @ 0x402FFE, 0x403408, 0x403496, 0x4037EC
+      boardAreaWidth               x3   @ 0x402EB1, 0x40300A, 0x403747
+      boardCellCount               x2   @ 0x402EB6, 0x403004
+      boardOriginX_calc            x2   @ 0x402ED3, 0x40375F
+      connectThreshold(5)          x1   @ 0x402ED8
+      figuresModeFlag              x2   @ 0x4034E0, 0x4034E9
+      menuCmdRoute                 x1   @ 0x403E9D
+      panelHalfWidth               x2   @ 0x402F04, 0x403786
+      boardOriginY_calc            x4   @ 0x402F24, 0x402F6A, 0x4037A6, 0x4037DD
+      stateFlags0                  x1   @ 0x402F2B
+      stateFlags1                  x1   @ 0x402F32
+      panelOriginX                 x2   @ 0x402F64, 0x4037D7
+      panelOriginY                 x2   @ 0x402F6F, 0x4037E2
+      panelWidth(125)              x1   @ 0x402F74
+      stateFlags2                  x1   @ 0x402F7E
+      scoreTable[16] x 32B         x2   @ 0x403DC2, 0x403EA2
+      scoreTable[0].score          x2   @ 0x403D6A, 0x403E98
+      scoreTable[0].score(alias)   x3   @ 0x40340D, 0x40349B, 0x4037F1
+      atlasOldBitmap               x2   @ 0x402E6C, 0x403B05
+      atlasDC                      x4   @ 0x402E58, 0x403B0C, 0x403B1A, 0x40436C
+      statusHwnd                   x7   @ 0x403348, 0x40353A, 0x40354A, 0x403574, 0x4035E7, 0x403AF3, 0x4044D8
+      cheatFlag                    x4   @ 0x4033DF, 0x40352C, 0x403533, 0x403579
+      mainHwnd                     x4   @ 0x403EC1, 0x404163, 0x40420C, 0x4044E5
+      board[81] (9x9 cells)        x6   @ 0x4030ED, 0x403131, 0x4031AC, 0x403226, 0x403252, 0x40425A
+      spriteSetToggle(0=sphere,1=poly) x3   @ 0x40359E, 0x4035A5, 0x404359
+
+  func 0x4052B5  
+      hInstance                    x5   @ 0x405348, 0x4053A9, 0x405400, 0x4054B3, 0x405507
+
+  func 0x4055D0  
+      hInstance                    x2   @ 0x4055E2, 0x4055F5
+
+  func 0x40568D  
+      hInstance                    x6   @ 0x40572B, 0x405799, 0x4057CE, 0x405800, 0x40591E, 0x405979
+
+  func 0x4059AF  
+      hInstance                    x1   @ 0x4059B4
+
+=== 棋盘数组 0x40B2F0 的所有访问点 ===
+  0x401623, 0x4016BA, 0x40176E, 0x401777, 0x40179C, 0x4017B5, 0x4017C2, 0x4017F9, 0x401806, 0x40184F, 0x401887, 0x401895, 0x4018B5, 0x401915, 0x401987, 0x4019C1, 0x4019CF, 0x4019EF, 0x401A65, 0x401A9B, 0x401AB6, 0x401AEC, 0x401B16, 0x401B59, 0x401BC2, 0x401C0B, 0x401C23, 0x401CC1, 0x401D17, 0x401D2C, 0x401D3E, 0x401D7A, 0x401DE9, 0x40281C, 0x4030ED, 0x403131, 0x4031AC, 0x403226, 0x403252, 0x40425A
+  -> 分布在 9 个函数中

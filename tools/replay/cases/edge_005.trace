@@ -1,0 +1,7 @@
+# hand-made: illegal move (empty source), blocked destination
+seed 42
+board .................................................................................
+op move 0 0 4 4
+op click 2 2
+op setusefigures 1
+op newgame

@@ -1,0 +1,64 @@
+=== .data / .idata 字符串 (VA) ===
+  0x40A020  WinLinezWindowClass
+  0x40A098  winlines.res
+  0x40A0A8  lines.res
+  0x40A0C0  MS Sans Serif
+  0x40A0D0  WinLinez v1.30
+  0x40A0EE            
+  0x40A108       
+  0x40A122                 
+  0x40A138  WinLinez Main Window
+  0x40A150  WinLinez.INI
+  0x40A160  WindowX
+  0x40A168  WindowY
+  0x40A170  WindowWidth
+  0x40A180  WindowHeight
+  0x40A190  WindowMaximized
+  0x40A1A0  ShowNext
+  0x40A1B0  ShowStatistics
+  0x40A1C0  UseFigures
+  0x40A1D0  WinLinez Statistics Window
+  0x40A200  SOFTWARE\Ivan Golubev\WinLinez\HighScore
+  0x40A230  Table
+  0x40A238  Hash
+  0x40A244      
+  0x40A285   WinLinez 
+  0x40A2CC  !)                                       
+  0x40A30C        
+  0x40A336  ?               
+  0x40A35E  ?              
+  0x40A37C   WinLinez 
+  0x40A388  ?            
+  0x40A3A0  XGrdCptDialog
+  0x40A3B0  XButton
+  0x40A3B8  XBevel
+  0x40A3C0  XStatusBar
+  0x40A3D0  XHyperLink
+  0x40A3E8  ?subject
+  0x40A3F8  XStaticText
+  0x40A408  XGauge
+  0x40A410  MS Sans Serif
+  0x40A420  DISPLAY
+  0x40A481  winlinez.hlp
+  0x40A4A5  %d. %s
+  0x40A4AF  %d (%d%%)
+  0x40A4C2            
+  0x40A4D3  MS Sans Serif
+  0x40A4E1  DISPLAY
+  0x40A4E9  tooltips_class32
+  0x40A4FA  %d%%
+  0x40A501  DISPLAY
+
+=== 代码段内嵌字符串 (VA) ===
+  0x401041  (c) 1998-1999 Ivan Golubev      
+  0x401063  http://www.golubev.com          
+  0x40580B  |$ WQSRh
+  0x4092C0  MS Sans Serif
+  0x4092D0  WinLinez v1.30
+  0x409338  WinLinez Main Window
+  0x4093D0  WinLinez Statistics Window
+  0x409400  SOFTWARE\Ivan Golubev\WinLinez\HighScore
+  0x409485   WinLinez 
+  0x40957C   WinLinez 
+  0x409610  MS Sans Serif
+  0x4096D3  MS Sans Serif

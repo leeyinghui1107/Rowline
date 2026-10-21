@@ -1,0 +1,34 @@
+[package]
+name = "rowline-app"
+description = "Rowline application: wiring, game loop and entry point"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "rowline"
+path = "src/main.rs"
+
+[dependencies]
+rowline-core.workspace = true
+rowline-display.workspace = true
+rowline-theme.workspace = true
+rowline-storage.workspace = true
+rowline-platform.workspace = true
+rowline-render.workspace = true
+rowline-assets.workspace = true
+winit = { version = "0.30", optional = true, default-features = false,
+          features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }
+wgpu = { version = "30", optional = true, default-features = false,
+         features = ["wgsl", "dx12", "metal", "vulkan", "gles"] }
+
+[features]
+default = ["gpu"]
+# GPU rendering via wgpu.
+gpu = ["rowline-render/wgpu", "rowline-render/text", "rowline-platform/winit", "dep:winit", "dep:wgpu"]
+# Software rendering via softbuffer (no GPU driver needed).
+software = ["rowline-render/softbuffer"]
+# Persist settings and scores to disk.
+fs = ["rowline-platform/fs", "rowline-storage/fs"]
