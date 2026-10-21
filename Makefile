@@ -7,6 +7,8 @@
 #   make test     : run the differential replay gate
 
 CC      ?= cc
+# The Python interpreter: Windows installs it as `python`, not `python3`.
+PYTHON  ?= python3
 CFLAGS  ?= -std=c99 -O2 -Wall -Wextra -Wno-unused-parameter
 SRC     := reference/c-impl
 BUILD   := build
@@ -31,6 +33,8 @@ CHECK_BIN := $(BUILD)/rowline-layout-check
 # ------------------------------------------------------------------ rust
 RUST_DIR  := rust
 RUST_BIN  := $(RUST_DIR)/target/release/rowline-replay
+# On Windows the binary carries an .exe suffix.
+RUST_BIN_EXE := $(RUST_BIN).exe
 
 SDL_CFLAGS ?= $(shell sdl2-config --cflags 2>/dev/null)
 SDL_LIBS   ?= $(shell sdl2-config --libs 2>/dev/null || echo -lSDL2)
@@ -76,13 +80,13 @@ $(BUILD):
 	mkdir -p $(BUILD)
 
 sheet:
-	python3 tools/make_sheet.py
+	$(PYTHON) tools/make_sheet.py
 
 icons:
-	python3 tools/make_icons.py
+	$(PYTHON) tools/make_icons.py
 
 package:
-	python3 tools/package.py
+	$(PYTHON) tools/package.py
 
 # Render a frame into a PNG without a GPU or a display.
 SHOT_BIN := $(RUST_DIR)/target/release/rowline-shot
@@ -93,12 +97,12 @@ shot: $(SHOT_BIN)
 
 test: $(REPLAY_BIN) $(CHECK_BIN)
 	$(CHECK_BIN)
-	@if [ -x "$(RUST_BIN)" ]; then \
+	@if [ -x "$(RUST_BIN)" ] || [ -x "$(RUST_BIN_EXE)" ]; then \
 	    echo "--- four-way differential gate (python / c / rust / golden) ---"; \
 	else \
 	    echo "--- rust not built; run 'make rust' for the four-way gate ---"; \
 	fi
-	python3 tools/replay/diff_replay.py --all
+	$(PYTHON) tools/replay/diff_replay.py --all
 
 clean:
 	rm -rf $(BUILD)
