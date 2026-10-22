@@ -12,25 +12,25 @@ crates/
 │                             board · rules · rng · layout · engine · input
 │                             render · view · state · save · menu · effects · trace
 │                             无 I/O · 无全局状态 · 无 unsafe
-├── display/    rowline-display   显示适配：ScalePolicy · Viewport · Lanczos-3
+├── display/    rowline-display   显示适配：Viewport · 变体选择
 │                             纯算术，无 I/O，可完整单测
-├── theme/      rowline-theme     设计令牌：深/浅色板 · 8pt 栅格 · 字阶
+├── theme/      rowline-theme     设计令牌：Classic 色板 · 8pt 栅格 · 字阶
 │                             缓动曲线 · 减少动效 · WCAG 对比度断言
 ├── storage/    rowline-storage   持久化：RON 存档 · 文件存储 · 原作榜单导入
 ├── platform/   rowline-platform  窗口事件 · 时钟 · 文件系统
-│                             + winit / 无窗口 / 内存三种后端
+│                             + 无窗口 / 内存文件系统
 ├── render/     rowline-render    Renderer trait + wgpu 后端 + softbuffer 后端
 │                             + 动态字形图集（DPR 栅格化）
-├── assets/     rowline-assets   精灵图集 · 图标条 · 变体命名 · 系统字体解析
+├── assets/     rowline-assets   内嵌精灵图集 · 图标条 · 中英文字体
 ├── app/        rowline-app       装配层：事件循环 · 命令路由 · HUD · 菜单 · 特效
-└── tools/      rowline-tools     wl-replay · wl-layout-check · wl-dpi-probe · wl-import
+└── tools/      rowline-tools     wl-replay · wl-layout-check · wl-dpi-probe · wl-import · wl-shot
 ```
 
 ## 快速开始
 
 ```bash
 cargo build --release --workspace --all-features
-cargo test --release --workspace --all-features     # 97 项
+cargo test --release --workspace --all-features     # 140 项
 cargo clippy --all-targets --all-features -- -D warnings
 cargo fmt --check
 
@@ -44,15 +44,12 @@ cargo build --release --workspace --no-default-features
 
 | crate | feature | 默认 | 依赖 |
 |---|---|---|---|
-| `core` | `serde` | ✗ | serde（仅 derive，用于存档模型） |
-| `platform` | `winit` | ✗ | winit 0.30（rwh_06） |
 | | `fs` | ✗ | 真实文件系统 |
 | `render` | `wgpu` | ✗ | wgpu 30 · pollster · bytemuck · glam |
 | | `softbuffer` | ✗ | softbuffer 0.4 · image |
 | | `text` | ✗ | ab_glyph + image（按 DPR 栅格化的动态字形图集） |
-| `assets` | `jpg` / `bmp` | ✗ | 更多图片格式 |
 | `storage` | `fs` | ✗ | 落盘 |
-| `app` | `gpu` | ✓ | 传递 platform/winit + render/wgpu + render/text |
+| `app` | `gpu` | ✓ | winit + render/wgpu + render/text |
 | | `software` | ✗ | 传递 render/softbuffer |
 | | `fs` | ✗ | 传递 platform/fs + storage/fs |
 | `tools` | `dpi` | ✗ | 传递 winit（显示环境探针） |
@@ -90,7 +87,7 @@ python-reference  ≡  c-implementation  ≡  rust-implementation  ≡  golden
 
 - [x] 设计令牌 crate（深/浅色板 + 对比度断言 + 8pt 栅格 + 缓动曲线）
 - [x] SDF 形状管线（圆角 / 渐变 / 投影 / 辉光）与双管线绘制列表
-- [x] 动态字形图集（按 DPR 栅格化）与系统字体回退
+- [x] 动态字形图集（按 DPR 栅格化）与内嵌中英文字体
 - [x] 菜单模型 + 绘制 + 键盘/鼠标导航 + 命令参考浮层
 - [x] 粒子特效（纯装饰，可关闭）
 - [x] 图标集（24px 单色 + SVG 源 + @1x/@2x/@3x）与噪点纹理

@@ -7,8 +7,10 @@ A desktop host can only link binaries for its own operating system:
 * macOS needs the Apple SDK and linker, which only exist on a Mac;
 * Linux cross builds need a matching sysroot/toolchain (cross, zigbuild, ...).
 
-The reliable way to produce all three from any one machine is therefore to let
-GitHub Actions build each one on a native runner.  This script does that for
+On macOS, `tools/build_cross.py` (or `make cross`) can produce all three
+locally: it uses Apple clang/lipo, mingw-w64 and Rust's bundled rust-lld with a
+static musl target.  On other hosts, the reliable way to produce all three from
+any one machine is to let GitHub Actions build each one on a native runner.  This script does that for
 you: it builds the host platform locally and, when another platform is
 requested, triggers `.github/workflows/release.yml`, waits for it and downloads
 the bundles into `dist/`.
@@ -104,7 +106,13 @@ def find_cargo():
         env = os.environ.copy()
         env["PATH"] = str(cargo.parent) + os.pathsep + env.get("PATH", "")
         if not env.get("CARGO_HOME"):
-            env["CARGO_HOME"] = str(cargo.parent.parent)
+            # Only infer CARGO_HOME for an actual cargo home (`~/.cargo`,
+            # `C:\cargo`, ...).  Blindly using `parent.parent` turns a
+            # distro/Homebrew install (`/usr/bin/cargo`) into a bogus
+            # CARGO_HOME that cargo cannot write to.
+            home = cargo.parent.parent
+            if home.name in (".cargo", "cargo") or (home / "registry").is_dir():
+                env["CARGO_HOME"] = str(home)
         if not env.get("RUSTUP_HOME"):
             siblings = [
                 cargo.parent.parent.parent / "rustup",

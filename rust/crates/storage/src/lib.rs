@@ -15,7 +15,7 @@
 //! format and only imports the score table.
 
 use std::fmt::Write as _;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use rowline_core::save::{SaveData, SaveError, SaveFormat, ScoreRecord, Settings};
 use rowline_platform::{FileSystem, IoError};
@@ -45,23 +45,8 @@ impl SaveFormat for TextFormat {
         let s = &save.settings;
         let _ = writeln!(
             out,
-            concat!(
-                "settings window_x={} window_y={} window_width={} window_height={} ",
-                "window_maximized={} show_next={} show_statistics={} use_figures={} ",
-                "theme={} reduced_motion={} text_scale={} retro_mode={}"
-            ),
-            s.window_x,
-            s.window_y,
-            s.window_width,
-            s.window_height,
-            s.window_maximized,
-            s.show_next,
-            s.show_statistics,
-            s.use_figures,
-            s.theme,
-            s.reduced_motion,
-            s.text_scale,
-            s.retro_mode
+            concat!("settings window_x={} window_y={} window_width={} window_height={}"),
+            s.window_x, s.window_y, s.window_width, s.window_height
         );
         Ok(out.into_bytes())
     }
@@ -164,25 +149,11 @@ fn parse_score(rest: &str) -> Result<(String, u32), String> {
 fn apply_setting(s: &mut Settings, key: &str, value: &str) -> Result<(), String> {
     let int = |v: &str| v.parse::<i32>().map_err(|_| format!("bad {key}"));
     let uint = |v: &str| v.parse::<u32>().map_err(|_| format!("bad {key}"));
-    let byte = |v: &str| v.parse::<u8>().map_err(|_| format!("bad {key}"));
-    let flag = |v: &str| match v {
-        "true" => Ok(true),
-        "false" => Ok(false),
-        _ => Err(format!("bad {key}")),
-    };
     match key {
         "window_x" => s.window_x = int(value)?,
         "window_y" => s.window_y = int(value)?,
         "window_width" => s.window_width = uint(value)?,
         "window_height" => s.window_height = uint(value)?,
-        "window_maximized" => s.window_maximized = flag(value)?,
-        "show_next" => s.show_next = flag(value)?,
-        "show_statistics" => s.show_statistics = flag(value)?,
-        "use_figures" => s.use_figures = flag(value)?,
-        "theme" => s.theme = byte(value)?,
-        "reduced_motion" => s.reduced_motion = flag(value)?,
-        "text_scale" => s.text_scale = byte(value)?,
-        "retro_mode" => s.retro_mode = flag(value)?,
         // Unknown keys are ignored, so a newer build can add settings
         // without older ones refusing to load the file.
         _ => {}
@@ -215,11 +186,6 @@ impl<'a, F: FileSystem> Store<'a, F> {
             format: TextFormat,
             path: Some(path.into()),
         }
-    }
-
-    /// The path the store writes to.
-    pub fn path(&self) -> Option<&Path> {
-        self.path.as_deref()
     }
 
     /// Load the save.
@@ -263,7 +229,7 @@ pub mod legacy {
     /// and then extracts the `Table` value's bytes.
     pub fn import_table_hex(hex: &str) -> Result<Vec<ScoreRecord>, SaveError> {
         let cleaned: String = hex.chars().filter(|c| c.is_ascii_hexdigit()).collect();
-        if cleaned.len() % 2 != 0 {
+        if !cleaned.len().is_multiple_of(2) {
             return Err(SaveError::Decode("odd number of hex digits".into()));
         }
         let bytes: Vec<u8> = (0..cleaned.len() / 2)
@@ -283,7 +249,7 @@ pub mod legacy {
     /// Build a save file from an imported table.
     pub fn to_save(records: Vec<ScoreRecord>, settings: Settings) -> SaveData {
         SaveData {
-            version: 1,
+            version: rowline_core::save::SAVE_VERSION,
             scores: records,
             settings,
         }
@@ -310,8 +276,6 @@ mod tests {
             name: "a \"quoted\" name".into(),
             score: 7,
         });
-        data.settings.theme = 1;
-        data.settings.text_scale = 3;
         data.settings.window_x = -1;
         let bytes = f.encode(&data).unwrap();
         let back = f.decode(&bytes).unwrap();

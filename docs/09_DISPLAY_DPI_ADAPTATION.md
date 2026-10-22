@@ -104,12 +104,8 @@ physical_px    = logical_px * content_scale
 ### 2.2 视口计算（`crates/display/src/viewport.rs`）
 
 ```rust
-pub enum ScalePolicy {
-    /// 内容铺满窗口；布局按客户区重新计算。
-    Logical,
-    /// 内容保持固定逻辑分辨率，等比缩放后居中。
-    Fixed { width: u32, height: u32, allow_non_integer: bool },
-}
+// 重设计后只有一种策略：内容铺满窗口，布局按客户区重新计算。
+// 固定分辨率（ScalePolicy::Fixed）已随“固定分辨率”菜单一起移除。
 
 pub struct Viewport {
     pub logical_size: Size,      // 客户区，逻辑单位
@@ -121,13 +117,11 @@ pub struct Viewport {
     pub integer_scale: bool,     // content_scale 是否为整数
 }
 
-pub fn compute_viewport(policy, physical, scale_factor) -> Viewport
+pub fn compute_viewport(physical: Size, scale_factor: f32) -> Viewport
 ```
 
-**`Logical` 策略**（WinLinez 默认）：
-
 ```rust
-ScalePolicy::Logical => Viewport {
+Viewport {
     logical_size: Size::new(physical.width / sf, physical.height / sf),
     physical_size: physical,
     scale_factor: sf,
@@ -204,10 +198,8 @@ logical.x = (physical.x - content_rect.x) / content_scale
 logical.y = (physical.y - content_rect.y) / content_scale
 ```
 
-* `ScalePolicy::Logical`：`content_rect` 覆盖整个窗口，`content_scale` 就是
-  DPI 缩放，于是等价于 `physical / scale`；
-* `ScalePolicy::Fixed`：`content_rect` 是 letterbox 后的内容区域，
-  `content_scale` 是整数（或拟合）倍率；
+* `content_rect` 覆盖整个窗口，`content_scale` 就是 DPI 缩放，于是
+  `logical = physical / scale`；
 * 菜单、HUD、棋盘、对话框全部用同一套逻辑坐标，所以只需在事件入口换算一次。
 
 > **回归教训**：早期代码把物理坐标直接传给 `Layout::hit_cell`。在 200% 屏上
@@ -260,7 +252,7 @@ fn rasterise(&mut self, ch: char) -> PlacedGlyph {
 * 字形四边形的**逻辑尺寸 = 纹素尺寸 / dpr**，于是渲染层的 `content_scale` 把它还原成物理像素，
   整个链条闭环。
 
-### 3.3 位图资产：@1x / @2x / @3x / @4x 多倍图 + Lanczos 兜底
+### 3.3 位图资产：@1x / @2x / @3x / @4x 多倍图
 
 **索引契约不变**（`docs/05`），只有**纹素坐标**随倍率放大：
 
@@ -296,17 +288,8 @@ pub fn select_variant(available: &[u32], scale_factor: f32) -> Option<u32> {
 | 300% | `@3x` | 1:1 采样 |
 | 400% / 500% | `@4x` | 1:1 采样（500% 时 1.25× 超采样） |
 
-**没有足够变体时的兜底**：运行时 **Lanczos-3** 重采样。
-
-```rust
-// crates/display/src/resample.rs
-pub fn lanczos3_rgba(src: &[u8], src_w: u32, src_h: u32,
-                     dst_w: u32, dst_h: u32) -> Vec<u8>
-```
-
-* 可分离实现（水平一遍 + 垂直一遍），复杂度 `O(w·h)` 而非 `O(w·h·k)`。
-* 权重归一化（`Σw = 1`），有单测断言。
-* 比双线性更适合**缩小**（不会出现硬边），比最近邻更适合**放大**（不丢细节）。
+**没有足够变体时的兜底**：使用最大的已内嵌变体（`@4x`）。产品不再
+包含运行时 Lanczos 重采样，避免为一条几乎不会触发的路径链接额外代码。
 
 **本项目的素材是程序化生成的**（`tools/make_sheet.py`），因此 `@2x`/`@3x`/`@4x` 是**真正的高分辨率重绘**，
 而不是放大：
@@ -322,25 +305,12 @@ python3 tools/make_sheet.py
 > BMP 副本只保留到 `@3x`（C 对照实现与人工检查用）；`@4x` 仅出 PNG，
 > 避免仓库多出 ~16 MB 的无用位图。图标同理：`icons@4x.png` 为 1248×96。
 
-### 3.4 固定逻辑分辨率：letterbox / pillarbox
+### 3.4 固定逻辑分辨率（已移除）
 
-启用 `ScalePolicy::Fixed` 后：
-
-* 内容按 `min(sx, sy)` 等比缩放，**居中**；
-* 剩余空间成为黑边（左右 = pillarbox，上下 = letterbox）；
-* `integer_scale = true` 时缩放因子被**向下取整**到整数。
-
-渲染层通过 `content_rect` 把内容限制在黑边内：
-
-```
-target 3840×2160 (4K, 200%)
-content_rect = 居中的 1920×1080 区域
-content_scale = 1.0     ← 注意：这是"内容逻辑单位→物理像素"的比值
-```
-
-> **注意区分两个 scale**：
-> `scale_factor`（显示器 DPR）与 `content_scale`（内容缩放）在 `Fixed` 策略下**不是同一个数**。
-> 前者决定**字体与位图素材**的栅格化倍率，后者决定**内容几何**的缩放。
+重设计移除了固定分辨率模式：棋盘始终保持 36 逻辑像素的格宽，窗口变大时
+只是四周留白增加。因此 `content_scale` 恒等于显示器的 `scale_factor`，
+不会出现 letterbox / pillarbox，也不存在“内容缩放”和“显示器 DPR”两个
+不同倍率的区分。
 
 ---
 
@@ -483,7 +453,7 @@ pub fn configure_surface(&mut self, width: u32, height: u32) {
 
 ```rust
 fn sync_viewport(&mut self) {
-    let vp = compute_viewport(&ScalePolicy::Logical, self.physical, self.scale);
+    let vp = compute_viewport(self.physical, self.scale);
     let rect = Rect::new(vp.content_rect.x, vp.content_rect.y,
                          vp.content_rect.width, vp.content_rect.height);
     if let Some(r) = self.renderer.as_mut() {
@@ -549,14 +519,14 @@ rust/crates/
 │   └── src/
 │       ├── lib.rs
 │       ├── viewport.rs     ScalePolicy · Viewport · compute_viewport
-│       └── resample.rs     Lanczos-3 · select_variant
+│       └── resample.rs     select_variant
 ├── core/                   rowline-core       逻辑 + 视图（逻辑坐标）
 │   └── src/
 │       ├── layout.rs       布局公式（逻辑单位）
 │       ├── view.rs         build_frame：逻辑坐标的 RenderCmd
 │       └── state.rs        GameState（新增 sheet_scale）
 ├── platform/               rowline-platform   窗口事件与 scale factor
-│   └── src/winit_backend.rs
+│   └── src/headless.rs
 ├── render/                 rowline-render     渲染后端
 │   └── src/
 │       ├── lib.rs          Renderer trait（新增 set_viewport）
@@ -564,7 +534,7 @@ rust/crates/
 │       ├── softbuffer_backend.rs  CPU 参考后端
 │       └── font.rs         动态字形图集（DPR 栅格化）
 ├── assets/                 rowline-assets     素材变体与索引契约
-│   └── src/lib.rs          SpriteSheet(scale) · variant_name · upscale_lanczos
+│   └── src/lib.rs          SpriteSheet(scale) · 内嵌 PNG/图标/字体
 ├── app/                    rowline-app        外壳：窗口、事件循环、DPI 接线
 │   └── src/main.rs
 └── tools/                  rowline-tools
@@ -583,8 +553,7 @@ rust/crates/
 | A2 | 整数倍优先 | `Fixed` 策略单测 | 1.5625 → 1.0；`allow_non_integer` 时保留小数 |
 | A3 | letterbox 居中 | 2560×1440 + 640×480 内容 | `content_rect.x = 320`，`letterboxed = true` |
 | A4 | 零 DPR 防护 | `scale_factor = 0` | 不除零，退化为 1.0 |
-| A5 | Lanczos 权重归一 | `resample` 单测 | `Σw = 1`（误差 < 1e-4） |
-| A6 | Lanczos 保留纯色 | 纯色块放大 | 内部像素颜色偏差 ≤ 2 |
+| A5 | 变体选择 | `select_variant` 单测 | 选择覆盖 DPR 的最小变体 |
 | A7 | 变体选择 | 100/125/150/200/300/400% | 分别选到 @1x/@2x/@2x/@2x/@3x/@4x |
 | A8 | 精灵索引随倍率缩放 | `core::view` 单测 | @2x 时 `src_x`、`src_y`、尺寸全部 ×2 |
 | A9 | 字形按 DPR 栅格化 | 用系统字体实测 | 200% 下字形高度 ≈ 名义尺寸 × 2；推进宽度仍是逻辑单位 |
@@ -646,12 +615,12 @@ rowline-dpi-probe: display environment
 
 | 限制 | 影响 | 计划 |
 |---|---|---|
-| 文本暂用占位块（无 `text` feature 时） | HUD 不显示分数 | `text` feature 已实现，接 `assets/font.ttf` 即可（`app` 已接线） |
-| 无字体文件时静默跳过 | HUD 无字 | 加一个内置位图字体作为兜底 |
-| ~~`Fixed` 策略未接入 UI~~ | ✅ 已接入：`选项 · 固定分辨率`（id 515）或 `Ctrl+R` | 切换后视口在下一帧重建 |
+| ~~文本暂用占位块~~ | ✅ `text` feature 已实现，`app` 已接线 | — |
+| ~~无字体文件时静默跳过~~ | ✅ 已内嵌 WenQuanYi Micro Hei（拉丁 + CJK，Apache-2.0），不再依赖系统字体 | `assets/font/` · `embedded_font` |
+| ~~`Fixed` 策略未接入 UI~~ | ✅ 按重设计要求**移除**了固定分辨率模式，视口始终铺满窗口 | `display::viewport` |
 | Wayland 分数缩放由合成器负责 | 应用内仍是整数坐标 | 逻辑不变，物理尺寸由合成器给 |
 | 独占全屏未支持 | 不影响 | 刻意选择 Borderless |
-| ~~素材只到 @3x~~ | ✅ 已补 @4x；500% 缩放走 1.25× 超采样，而非放大 | 仍需更高倍率时才是 Lanczos 兜底 |
+| ~~素材只到 @3x~~ | ✅ 已补 @4x；500% 缩放走 1.25× 超采样，而非放大 | 超过 @4x 时使用最大已内嵌变体 |
 
 ---
 

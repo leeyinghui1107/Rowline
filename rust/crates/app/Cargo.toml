@@ -47,7 +47,7 @@ features = ["wgsl", "vulkan", "gles"]
 # The desktop product persists settings and scores; the original always did.
 default = ["gpu", "fs"]
 # GPU rendering via wgpu.
-gpu = ["rowline-render/wgpu", "rowline-render/text", "rowline-platform/winit", "dep:winit", "dep:wgpu"]
+gpu = ["rowline-render/wgpu", "rowline-render/text", "dep:winit", "dep:wgpu"]
 # Software rendering via softbuffer (no GPU driver needed).
 software = ["rowline-render/softbuffer"]
 # Persist settings and scores to disk.

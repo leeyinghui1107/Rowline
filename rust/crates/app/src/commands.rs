@@ -13,128 +13,74 @@ impl Command {
     /// The label shown in the command reference.
     pub fn label(&self) -> &'static str {
         match self.0 {
-            256 => "New game",
-            257 => "High scores",
-            258 => "Exit",
-            512 => "Next set",
-            513 => "Show statistics",
-            514 => "Use figures",
-            515 => "Fixed scale",
-            768 => "Contents",
-            769 => "About",
-            16528 => "Help",
-            _ => "Unknown",
+            256 => "新游戏",
+            257 => "高分榜",
+            258 => "退出",
+            513 => "显示统计",
+            769 => "关于 Rowline",
+            16528 => "帮助",
+            _ => "未知命令",
         }
     }
 
     /// The accelerator shown in the command reference.
+    ///
+    /// macOS uses the command key for the presentation shortcuts; the
+    /// labels follow the platform so the menu does not lie.
     pub fn shortcut(&self) -> &'static str {
         match self.0 {
             256 => "F4",
             257 => "H",
             258 => "Alt+F9",
-            512 => "F3",
             513 => "F5",
-            514 => "F6",
-            515 => "Ctrl+R",
-            768 => "F1",
             769 => "",
-            16528 => "",
+            16528 => "F1",
             _ => "",
         }
     }
 
-    /// New game -- `新建(&N)`, accelerator F4.
+    /// New game -- `新建`, accelerator F4.
     pub const NEW_GAME: Command = Command(256);
-    /// Show the high-score table -- `显示高分榜(&H)`.
+    /// Show the high-score table -- `高分榜`, accelerator H.
     pub const SHOW_HIGH_SCORES: Command = Command(257);
-    /// Quit -- `退出(&X)`, accelerator Alt+F9.
+    /// Quit -- `退出`, accelerator Alt+F9.
     pub const EXIT: Command = Command(258);
-    /// Toggle the "next set" preview -- `下一组(&N)`, accelerator F3.
-    pub const TOGGLE_NEXT_SET: Command = Command(512);
-    /// Toggle the statistics readout -- `显示统计(&S)`, accelerator F5.
+    /// Open the statistics dialog -- `显示统计`, accelerator F5.
     pub const TOGGLE_STATISTICS: Command = Command(513);
-    /// Toggle the polygon sprite set -- `使用形状`, accelerator F6.
-    pub const TOGGLE_USE_FIGURES: Command = Command(514);
-    /// Toggle the fixed-resolution display policy.
-    ///
-    /// This is a re-implementation extension (the original only has the
-    /// `Ctrl+R` key); it uses an id outside the original's nine commands.
-    pub const TOGGLE_FIXED_SCALE: Command = Command(515);
-    /// Open the help contents -- `内容(&C)`, accelerator F1.
-    pub const CONTENTS: Command = Command(768);
-    /// Open the about box -- `关于(&A)...`.
+    /// Open the about box -- `关于 Rowline`.
     pub const ABOUT: Command = Command(769);
-    /// Help -- `帮助(&H)`.
+    /// Open the help dialog -- `帮助`, accelerator F1.
     pub const HELP: Command = Command(16528);
 
     /// The command a key press maps to, if any.
     pub fn from_key(key: rowline_core::input::Key) -> Option<Command> {
         use rowline_core::input::Key;
         Some(match key {
-            Key::F1 => Command::CONTENTS,
-            Key::F3 => Command::TOGGLE_NEXT_SET,
+            Key::F1 => Command::HELP,
             Key::F4 => Command::NEW_GAME,
             Key::F5 => Command::TOGGLE_STATISTICS,
-            Key::F6 => Command::TOGGLE_USE_FIGURES,
-            // Win32 menu mnemonic for 显示高分榜(&H).
+            // Win32 menu mnemonic for 高分榜.
             Key::KeyH => Command::SHOW_HIGH_SCORES,
             _ => return None,
         })
     }
 }
 
-/// The icon strip's index of an icon.
+/// The icon strip's only used slot: the challenger's sword.
 ///
-/// The order matches `tools/make_icons.py`:
-/// new, trophy, exit, next, stats, figures, help, contents, about, settings,
-/// theme, crown, sword.
-pub const ICON_NEW: u32 = 0;
-pub const ICON_TROPHY: u32 = 1;
-pub const ICON_EXIT: u32 = 2;
-pub const ICON_NEXT: u32 = 3;
-pub const ICON_STATS: u32 = 4;
-pub const ICON_FIGURES: u32 = 5;
-pub const ICON_HELP: u32 = 6;
-pub const ICON_CONTENTS: u32 = 7;
-pub const ICON_ABOUT: u32 = 8;
-pub const ICON_SETTINGS: u32 = 9;
-pub const ICON_THEME: u32 = 10;
-/// The king's crown -- the mark of the CPU.
-pub const ICON_CROWN: u32 = 11;
-/// The challenger's sword -- the mark of the human.
+/// The atlas still carries the original thirteen icons; the rest are not
+/// referenced by the final two-menu design.
 pub const ICON_SWORD: u32 = 12;
-/// The number of icons in the atlas.
+/// The number of cells in the icon atlas.
 pub const ICON_COUNT: u32 = 13;
 
-/// The icon of a command, if it has one.
-pub fn icon_for(cmd: Command) -> Option<u32> {
-    Some(match cmd {
-        Command::NEW_GAME => ICON_NEW,
-        Command::SHOW_HIGH_SCORES => ICON_TROPHY,
-        Command::EXIT => ICON_EXIT,
-        Command::TOGGLE_NEXT_SET => ICON_NEXT,
-        Command::TOGGLE_STATISTICS => ICON_STATS,
-        Command::TOGGLE_USE_FIGURES => ICON_FIGURES,
-        Command::TOGGLE_FIXED_SCALE => ICON_SETTINGS,
-        Command::HELP => ICON_HELP,
-        Command::CONTENTS => ICON_CONTENTS,
-        Command::ABOUT => ICON_ABOUT,
-        _ => return None,
-    })
-}
-
-/// Every command, for building a menu.
-pub const ALL: [Command; 10] = [
+/// Every command, for the menu and the in-app reference.
+pub const ALL: [Command; 6] = [
     Command::NEW_GAME,
     Command::SHOW_HIGH_SCORES,
-    Command::EXIT,
-    Command::TOGGLE_NEXT_SET,
     Command::TOGGLE_STATISTICS,
-    Command::TOGGLE_USE_FIGURES,
-    Command::TOGGLE_FIXED_SCALE,
+    Command::EXIT,
     Command::HELP,
-    Command::CONTENTS,
     Command::ABOUT,
 ];
 
@@ -149,7 +95,7 @@ mod tests {
         let menus = rowline_core::menu::default_menus();
         let in_menu: Vec<u16> = menus
             .iter()
-            .flat_map(|m| m.items.iter().filter_map(|i| i.id))
+            .flat_map(|m| m.items.iter().map(|i| i.id))
             .collect();
         for cmd in ALL {
             assert!(
@@ -162,22 +108,16 @@ mod tests {
     }
 
     #[test]
-    fn every_command_has_an_icon() {
-        for cmd in ALL {
-            assert!(icon_for(cmd).is_some(), "command {} has no icon", cmd.0);
-        }
-    }
-
-    #[test]
-    fn accelerators_match_the_original() {
-        assert_eq!(Command::from_key(Key::F3), Some(Command::TOGGLE_NEXT_SET));
+    fn accelerators_match_the_redesign() {
         assert_eq!(Command::from_key(Key::F4), Some(Command::NEW_GAME));
         assert_eq!(Command::from_key(Key::F5), Some(Command::TOGGLE_STATISTICS));
+        assert_eq!(Command::from_key(Key::F1), Some(Command::HELP));
         assert_eq!(
-            Command::from_key(Key::F6),
-            Some(Command::TOGGLE_USE_FIGURES)
+            Command::from_key(Key::KeyH),
+            Some(Command::SHOW_HIGH_SCORES)
         );
-        assert_eq!(Command::from_key(Key::F1), Some(Command::CONTENTS));
+        assert_eq!(Command::from_key(Key::F3), None);
+        assert_eq!(Command::from_key(Key::F6), None);
         assert_eq!(Command::from_key(Key::KeyA), None);
     }
 }

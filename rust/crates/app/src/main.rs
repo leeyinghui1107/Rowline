@@ -6,7 +6,7 @@
 //!
 //! | concern | where it lives |
 //! |---|---|
-//! | logical vs physical coordinates | `rowline-display` (`ScalePolicy`, `Viewport`) |
+//! | logical vs physical coordinates | `rowline-display` (`Viewport`) |
 //! | the surface and its format / present mode | `rowline-render` (wgpu backend) |
 //! | window events, scale factor, monitors | `rowline-platform` (winit backend) |
 //! | the layout in logical units | `rowline-core` (`Layout`) |
@@ -29,7 +29,7 @@
 use rowline_core::input::Size;
 use rowline_core::layout::Layout;
 use rowline_core::RuleModel;
-use rowline_display::{compute_viewport, ScalePolicy};
+use rowline_display::compute_viewport;
 use rowline_platform::{Clock, SystemClock};
 
 use rowline_app::game::Game;
@@ -109,40 +109,12 @@ mod gpu {
 
     /// The logical client size the window is created at.
     ///
-    /// The original's default is a 620x430 **outer** window, which is a
-    /// 604x371 client area at 100% Windows metrics; those are the dimensions
-    /// its layout formulas and the black-box screenshots were taken at.
-    /// Rowline draws its menu inside the client (the original used a native
-    /// menu outside it), so the menu strip is added on top, plus the rows
-    /// reserved for the window's bottom frame.  The 372-px content is the
-    /// smallest height the board fits into, keeping the board origin at the
-    /// original (138, 44).
-    const INITIAL_LOGICAL: (f64, f64) = (
-        604.0,
-        372.0
-            + rowline_core::layout::MENU_BAR_H as f64
-            + rowline_core::layout::FRAME_RESERVE as f64,
-    );
+    /// The redesign keeps the board at its calibrated size and adds margin
+    /// around it, so the menu, the HUD and the flanking figures have room to
+    /// breathe.  The board itself is still centred by the original formulas.
+    const INITIAL_LOGICAL: (f64, f64) = (760.0, 480.0);
     /// The font used for the HUD, in logical units.
     const FONT_SIZE: f32 = 16.0;
-
-    /// The directories that may contain the `assets/` tree.
-    ///
-    /// The executable's own directory comes first, so a packaged bundle works
-    /// when launched from a shortcut or another working directory; the
-    /// workspace-relative paths keep `cargo run` working.
-    fn asset_roots() -> Vec<std::path::PathBuf> {
-        let mut roots = Vec::new();
-        if let Ok(exe) = std::env::current_exe() {
-            if let Some(dir) = exe.parent() {
-                roots.push(dir.join("assets"));
-            }
-        }
-        roots.push("assets".into());
-        roots.push("../assets".into());
-        roots.push("../../assets".into());
-        roots
-    }
 
     pub struct GpuApp {
         game: Game,
@@ -159,8 +131,7 @@ mod gpu {
         /// The resolved logical/physical viewport.
         ///
         /// Input positions arrive in physical pixels; dividing by the
-        /// viewport maps them back into the content's logical coordinates
-        /// (including letterboxing and the retro policy).
+        /// viewport maps them back into the content's logical coordinates.
         viewport: rowline_display::Viewport,
         mods: rowline_core::input::Modifiers,
         fullscreen: bool,
@@ -179,7 +150,7 @@ mod gpu {
                 scale: 1.0,
                 logical: Size::new(INITIAL_LOGICAL.0 as f32, INITIAL_LOGICAL.1 as f32),
                 physical: Size::new(0.0, 0.0),
-                viewport: compute_viewport(&ScalePolicy::Logical, Size::new(0.0, 0.0), 1.0),
+                viewport: compute_viewport(Size::new(0.0, 0.0), 1.0),
                 mods: Default::default(),
                 fullscreen: false,
                 last_tick: SystemClock.now_millis(),
@@ -189,17 +160,11 @@ mod gpu {
         /// The game's layout, computed in **logical** units.
         ///
         /// The menu strip is drawn inside the window client, so the play
-        /// area is the remaining height; in retro mode the play area is the
-        /// fixed 640x480 design space instead of the window size.
+        /// area is the remaining height.
         fn layout(&self) -> Layout {
-            let (w, h) = if self.game.settings().retro_mode {
-                (640, 480)
-            } else {
-                (self.logical.width as i32, self.logical.height as i32)
-            };
             Layout::compute_framed(
-                w,
-                h,
+                self.logical.width as i32,
+                self.logical.height as i32,
                 rowline_core::layout::MENU_BAR_H,
                 rowline_core::layout::FRAME_RESERVE,
             )
@@ -221,18 +186,7 @@ mod gpu {
 
         /// Recompute the viewport and hand it to the renderer.
         fn sync_viewport(&mut self) {
-            // The retro policy keeps a fixed 640x480 logical resolution and
-            // scales it to fit; the default lays the board out for the window.
-            let policy = if self.game.settings().retro_mode {
-                ScalePolicy::Fixed {
-                    width: 640,
-                    height: 480,
-                    allow_non_integer: false,
-                }
-            } else {
-                ScalePolicy::Logical
-            };
-            let vp = compute_viewport(&policy, self.physical, self.scale);
+            let vp = compute_viewport(self.physical, self.scale);
             self.viewport = vp;
             let rect = rowline_core::render::Rect::new(
                 vp.content_rect.x,
@@ -293,19 +247,18 @@ mod gpu {
 
         /// Load the font and rasterise it at the current device resolution.
         ///
-        /// The bundled font wins; otherwise a system font is used, so the
-        /// game always renders text.
+        /// The face is compiled into the executable, so text does not depend
+        /// on an installed CJK font (a minimal Linux image or a Windows
+        /// install without the optional Chinese fonts still renders the UI).
         fn install_font(&mut self) {
-            let bytes = asset_roots()
-                .iter()
-                .find_map(|root| std::fs::read(root.join("font.ttf")).ok())
-                .or_else(|| rowline_assets::resolve_system_font().map(|(b, _)| b));
-            let Some(bytes) = bytes else {
-                note!("rowline: no usable font found; text will be omitted");
-                return;
-            };
             if let Some(r) = self.renderer.as_mut() {
-                let _ = r.set_font(bytes, FONT_SIZE, self.scale);
+                if let Err(e) = r.set_font(
+                    rowline_assets::embedded_font().to_vec(),
+                    FONT_SIZE,
+                    self.scale,
+                ) {
+                    note!("rowline: the embedded font could not be loaded: {e}");
+                }
             }
         }
 
@@ -591,27 +544,6 @@ mod gpu {
                         },
                     };
                     self.game.handle_event(&ev, layout);
-                    // Ctrl+T / Ctrl+M / Ctrl+- toggle the presentation
-                    // preferences; they never touch the game state.
-                    // The platform's command modifier: Cmd on macOS, Ctrl
-                    // elsewhere.  The original is Windows-only, so this is
-                    // the cross-platform equivalent of its Ctrl shortcuts.
-                    let command_mod = if cfg!(target_os = "macos") {
-                        self.mods.logo
-                    } else {
-                        self.mods.control
-                    };
-                    if matches!(event.state, ElementState::Pressed) && command_mod {
-                        match key {
-                            rowline_core::input::Key::KeyT => self.game.toggle_theme(),
-                            rowline_core::input::Key::KeyM => self.game.toggle_reduced_motion(),
-                            rowline_core::input::Key::KeyE => self.game.cycle_text_scale(),
-                            rowline_core::input::Key::KeyR => {
-                                self.game.toggle_retro_mode();
-                            }
-                            _ => {}
-                        }
-                    }
                     // F11 toggles full screen.
                     if matches!(event.state, ElementState::Pressed)
                         && matches!(key, rowline_core::input::Key::F11)
@@ -630,7 +562,7 @@ mod gpu {
             }
             // Advance the decorative effects.
             let now = SystemClock.now_millis();
-            let dt = ((now - self.last_tick) as f32 / 1000.0).min(0.1);
+            let dt = (now.saturating_sub(self.last_tick) as f32 / 1000.0).min(0.1);
             self.last_tick = now;
             let layout = self.layout();
             self.game.tick(dt, layout);
@@ -644,10 +576,6 @@ mod gpu {
                 }
             } else {
                 event_loop.set_control_flow(ControlFlow::Wait);
-            }
-            // A menu command (固定分辨率) may have changed the display policy.
-            if self.game.take_viewport_dirty() {
-                self.sync_viewport();
             }
             let layout = self.layout();
             if let Some(r) = self.renderer.as_mut() {
@@ -754,7 +682,6 @@ mod gpu {
             .run_app(&mut app)
             .map_err(|e| format!("event loop: {e}"))?;
         // Persist the settings and the scores on the way out.
-        app.game.sync_settings();
         store_save(&mut app.fs, &app.game.to_save());
         Ok(())
     }
@@ -799,7 +726,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             rowline_core::layout::MENU_BAR_H,
             rowline_core::layout::FRAME_RESERVE,
         );
-        let vp = compute_viewport(&ScalePolicy::Logical, physical, scale);
+        let vp = compute_viewport(physical, scale);
         renderer.set_viewport(
             rowline_core::render::Rect::new(
                 vp.content_rect.x,
@@ -824,12 +751,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         renderer.end();
 
         let now = clock.now_millis();
-        if now - last < 8 {
-            std::thread::sleep(std::time::Duration::from_millis(8 - (now - last)));
+        let elapsed = now.saturating_sub(last);
+        if elapsed < 8 {
+            std::thread::sleep(std::time::Duration::from_millis(8 - elapsed));
         }
         last = now;
     }
-    game.sync_settings();
     store_save(&mut fs, &game.to_save());
     Ok(())
 }

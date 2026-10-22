@@ -20,83 +20,35 @@
 
 ## 1. 设计语言
 
-> **默认主题是 "Classic"（原作 Win95 外观）**；Midnight / Paper 是可选的
-> 重设计外观，用 `Ctrl+T` 循环切换。复刻验收以 Classic 为准。
+> **唯一主题 = 原作 Classic**。柔光/Midnight 等可选外观已随主题切换功能删除。
 
-### 1.0 经典主题 "Classic"（默认，复刻原作）
-
-| 语义令牌 | 值 | 来源 |
-|---|---|---|
-| `background` / `board_backdrop` | `#000000` | 原版棋盘区黑底 |
-| `surface_alt`（菜单 / HUD） | `#F0F0F0` | `GetSysColor(COLOR_BTNFACE)`，Win10/11 |
-| `board_cell` | `#C0C0C0` | 原版图集空格底板 |
-| `score_fill` / `score_text` / `score_border` | 黑 / 白 / 白 | 实机截图 |
-| `text_primary` / `text_tertiary` | 黑 / `#606060` | 菜单黑字、`下组`/`颜色` 灰字（AA 5.2:1） |
-| `surface_hover` / `selection` | `#000080` | Win95 菜单高亮 / 选中 |
-| 7 色球 | `#00A000` `#0000C0` `#00C0C0` `#C000C0` `#C00000` `#C0C000` `#800000` | 原作图集直方图 |
-
-几何：
-
-* 菜单条 **20 px**（原作的原生菜单在非客户区；本实现自绘在客户区顶部）；
-* HUD **44 px**：左分数框（80×20，黑底白字、右对齐）、`下组`、3×36 px
-  预览格、`颜色`、右分数框；
-* 棋盘格 36 px，底板自带 Win95 立体边：上/左白、下/右 `#292929`、外沿
-  1 px 黑缝；
-* 圆角：**全部为 0**（`DesignSystem::radius()` 在 Classic 下返回 0）；
-* 阴影/辉光：无（令牌为全透明）；
-* 不绘制重设计工具栏（主题/显示两个按钮），快捷键仍然可用。
-
-### 1.1 深色主题 "Midnight"
+### 1.2 唯一主题：原作 Classic
 
 | 语义令牌 | HEX | 用途 |
 |---|---|---|
-| `background` | `#12141A` | 窗口底色 |
-| `surface` | `#1B1E26` | 棋盘面 |
-| `surface_alt` | `#161920` | 下沉面（侧栏） |
-| `surface_raised` | `#242833` | 抬起面（按钮、卡片） |
-| `surface_hover` | `#2C3140` | 悬停 |
-| `surface_active` | `#343A4B` | 按下 |
-| `outline` | `#3A4050` | 1 px 描边 |
-| `outline_strong` | `#565F73` | 强描边 / 焦点环 |
-| `text_primary` | `#F2F4F8` | 标题、正文 |
-| `text_secondary` | `#B8BECE` | 次要文字 |
-| `text_tertiary` | `#8E95A8` | 提示、说明 |
-| `text_on_accent` | `#12141A` | 主色上的文字 |
-| `accent` | `#FFC24B` | 主色（琥珀，呼应原作的棋/金意象） |
-| `accent_hover` | `#FFD066` | 主色悬停 |
-| `success` | `#5BD98A` | 成功 / 高分 |
-| `warning` | `#FFC24B` | 警告 |
-| `danger` | `#FF7B7B` | 危险 / 结束 |
-| `shadow` | `#000000A8` | 投影（alpha 66%） |
-| `glow` | `#FFC24B40` | 辉光（alpha 25%） |
-| `grid_line` | `#FFFFFF0F` | 棋盘网格线（alpha 6%） |
-| `selection` | `#FFC24B` | 选中态 |
-
-### 1.2 浅色主题 "Paper"
-
-| 语义令牌 | HEX | 用途 |
-|---|---|---|
-| `background` | `#F4F5F8` | 窗口底色 |
-| `surface` | `#FFFFFF` | 棋盘面 |
-| `surface_alt` | `#EDEFF3` | 下沉面（侧栏） |
-| `surface_raised` | `#FFFFFF` | 抬起面 |
-| `surface_hover` | `#E6E9EF` | 悬停 |
-| `surface_active` | `#DCE0E8` | 按下 |
-| `outline` | `#D2D6DF` | 描边 |
-| `outline_strong` | `#9AA2B2` | 强描边 |
-| `text_primary` | `#14161C` | 标题、正文 |
-| `text_secondary` | `#454C5C` | 次要文字 |
-| `text_tertiary` | `#656D7E` | 提示、说明 |
+| `background` | `#000000` | 棋盘区黑底 |
+| `surface` | `#000000` | 黑底 |
+| `board_backdrop` | `#000000` | 棋盘围边 |
+| `board_cell` | `#C0C0C0` | 棋子底板 |
+| `surface_alt` | `#F0F0F0` | 菜单/HUD 条（`COLOR_BTNFACE`） |
+| `surface_raised` | `#F0F0F0` | 卡片、对话框 |
+| `surface_hover` | `#000080` | Win95 菜单高亮（海军蓝） |
+| `outline` | `#808080` | 描边 |
+| `outline_strong` | `#000000` | 强描边 |
+| `text_primary` | `#000000` | 标题、正文 |
+| `text_secondary` | `#000000` | 次要文字 |
+| `text_tertiary` | `#606060` | 提示、说明 |
 | `text_on_accent` | `#FFFFFF` | 主色上的文字 |
-| `accent` | `#9A5B00` | 主色（深琥珀，保证白底可读） |
-| `accent_hover` | `#7E4A00` | 主色悬停 |
-| `success` | `#186C3B` | 成功 |
-| `warning` | `#8A5A00` | 警告 |
-| `danger` | `#B3261E` | 危险 |
-| `shadow` | `#14161C24` | 投影（alpha 14%） |
-| `glow` | `#9A5B0033` | 辉光 |
-| `grid_line` | `#14161C12` | 网格线 |
-| `selection` | `#9A5B00` | 选中态 |
+| `accent` | `#000080` | 主色（海军蓝） |
+| `accent_hover` | `#000080` | 主色悬停 |
+| `success` | `#008000` | 成功 |
+| `warning` | `#808000` | 警告 |
+| `danger` | `#800000` | 危险 |
+| `shadow` | 透明 | Win95 无投影 |
+| `glow` | 透明 | 无辉光 |
+| `grid_line` | `#000000` | 网格线 |
+| `selection` | `#000080` | 选中态 |
+| `scrim` | `#00000055` | 模态遮罩 |
 
 ### 1.3 球色板（7 色，按测量选型）
 
@@ -117,10 +69,9 @@
 | 每个球 vs 棋盘面对比度 ≥ 3:1 | 最低 **3.31** | 最低 **3.14** |
 | 两球灰度比 ≥ 1.10 | 最差 **1.182** | 最差 **1.120** |
 
-> **为什么 7 种颜色还要靠形状区分**：七种颜色要在纯亮度上完全可分是极苛刻的约束。
-> 本作**本来就有形状通道**——原作的"使用形状"精灵组给每种颜色配了不同的多边形。
-> 因此：**颜色 = 第一通道，形状 = 第二通道**，灰度下的可辨识度由形状保证，
-> 亮度只作为辅助。这是冗余编码，比强行拉 luminance 更专业。
+> **关于形状通道**：原作用“使用形状”精灵组给每种颜色配不同多边形。重设计
+> 移除了这套切换（它的菜单项与精灵集不再使用），因此可辨识性完全由颜色 +
+> 足够的灰度分离保证；上表的灰度比下限仍是 1.10，并由测试强制。
 
 ### 1.4 8 pt 栅格
 
@@ -194,7 +145,6 @@
 
 | 令牌 | 毫秒 | 用途 |
 |---|---|---|
-| `Duration::Instant` | 0 | 减少动效时的替身 |
 | `Duration::Fast` | 120 | 悬停 / 按下 |
 | `Duration::Normal` | 200 | 面板展开、淡入 |
 | `Duration::Slow` | 320 | 界面切换 |
@@ -206,21 +156,12 @@
 |---|---|---|
 | Idle | `surface_raised` | — |
 | Hover | `surface_hover` + 轻微上浮 1 px | `Fast` / `OutCubic` |
-| Press | `surface_active` + 下沉 1 px + 缩放 0.98 | `Fast` / `OutCubic` |
+| Press | `surface_hover`（Classic 的悬停/按下同为海军蓝） | `Fast` / `OutCubic` |
 | Focus | `outline_strong` 2 px 焦点环 | `Fast` / `Linear` |
 | Disabled | `surface_alt` + `text_tertiary` | — |
 
-```rust
-// crates/theme/src/theme.rs
-pub fn button_surface(&self, p: &Palette) -> Rgba {
-    match self.state {
-        HitState::Idle    => p.surface_raised,
-        HitState::Hover   => p.surface_hover,
-        HitState::Press   => p.surface_active,
-        HitState::Disabled => p.surface_alt,
-    }
-}
-```
+Classic 主题没有独立的按下色：悬停与按下都使用 `surface_hover`（海军蓝），
+文字改为 `text_on_accent`（白色）。
 
 ### 2.4 界面切换淡入
 
@@ -243,36 +184,10 @@ pub fn button_surface(&self, p: &Palette) -> Rgba {
 > **所有粒子都是纯装饰**：
 > 它们不参与命中测试、不影响棋盘状态、在"减少动效"下完全不生成。
 
-### 2.6 减少动效
+### 2.6 减少动效（已移除）
 
-```rust
-// crates/theme/src/motion.rs
-pub fn duration(&self, d: Duration) -> u32 {
-    if self.reduced { 0 } else { d.ms() }
-}
-
-pub fn progress(&self, elapsed_ms: u32, d: Duration, easing: Easing) -> f32 {
-    let total = self.duration(d);
-    if total == 0 { return 1.0; }          // 立刻到达终态，不留半截动画
-    let t = (elapsed_ms as f32 / total as f32).clamp(0.0, 1.0);
-    easing.apply(t)
-}
-```
-
-**减少动效时的行为约定**：
-
-| 行为 | 正常 | 减少动效 |
-|---|---|---|
-| 悬停/按下 | 渐变过渡 | 瞬时切换 |
-| 面板淡入 | 淡入 + 位移 | 直接出现（无透明中间态） |
-| 消除动画 | 多步重绘 + `Sleep` | 立即呈现最终状态 |
-| 粒子 | 生成 | 不生成 |
-| 分数跳动 | 缩放脉冲 | 无脉冲（数字照常更新） |
-| 提示消息 | 淡入后停留再淡出 | 直接显示，按时长消失 |
-
-**切换方式**：`Ctrl+M`（运行时）或设置项持久化（`Settings`）。
-
----
+“减少动态效果”偏好随视图菜单一起删除，动画始终按正常时序播放；
+相关代码（`Motion`、`Duration`、`Easing`、`TextScale`）也已清理。
 
 ## 3. 资产规范
 
@@ -312,7 +227,7 @@ pub fn progress(&self, elapsed_ms: u32, d: Duration, easing: Easing) -> f32 {
 | 字体 | — | — | — | — | **不导出**，运行时按 DPR 栅格化 |
 
 **命名约定**：`name.png` / `name@2x.png` / `name@3x.png` / `name@4x.png`
-（与 `assets::variant_name` 一致）。噪声纹理目前只有 @1x；它是低 alpha
+（内嵌文件按同样的 `@2x/@3x/@4x` 命名）。噪声纹理目前只有 @1x；它是低 alpha
 的平铺颗粒，放大由 GPU 采样完成，不影响清晰度。
 
 **精灵图集的倍率约束**（`docs/05` 的扩展）：
@@ -367,9 +282,9 @@ python3 tools/make_sheet.py
 全部在 `rowline_theme::Palette`，深浅两套，见 §1.1 / §1.2。调用侧只写语义名：
 
 ```rust
-use rowline_theme::{DesignSystem, Palette, ThemeKind};
+use rowline_theme::{DesignSystem, Palette};
 
-let ds = DesignSystem::new(ThemeKind::Dark, /* reduced_motion */ false);
+let ds = DesignSystem::new();
 let p: &Palette = &ds.palette;
 cmd(RenderCmd::RoundedRect {
     rect: panel,
@@ -480,13 +395,16 @@ for item in &self.order {
 
 ```rust
 // crates/app/src/main.rs
-const FONT_PATH: &str = "assets/font.ttf";
 const FONT_SIZE: f32 = 16.0;      // 逻辑单位
 
 fn install_font(&mut self) {
-    let Ok(bytes) = std::fs::read(FONT_PATH) else { return };
+    // 字体随二进制编译，无外部文件、也不依赖系统 CJK 字体。
     if let Some(r) = self.renderer.as_mut() {
-        let _ = r.set_font(bytes, FONT_SIZE, self.scale);
+        let _ = r.set_font(
+            rowline_assets::embedded_font().to_vec(),
+            FONT_SIZE,
+            self.scale,
+        );
     }
 }
 ```
@@ -578,22 +496,10 @@ pub fn frame(game: &Game, layout: Layout) -> Vec<RenderCmd> {
 }
 ```
 
-### 4.6 主题与偏好的运行时切换
+### 4.6 主题与偏好的运行时切换（已移除）
 
-```rust
-// crates/app/src/main.rs
-if event.state == ElementState::Pressed && self.mods.control {
-    match key {
-        Key::KeyT => self.game.toggle_theme(),          // 深 / 浅
-        Key::KeyM => self.game.toggle_reduced_motion(),  // 减少动效
-        Key::KeyE => self.game.cycle_text_scale(),       // 文字大小
-        _ => {}
-    }
-}
-```
-
-**这些开关只改表现，不触碰游戏状态**——`Game::toggle_theme` 只换 `design.palette`，
-棋盘、分数、规则完全不受影响。
+最终版本只保留原作 Classic 主题，移除了主题切换、减少动态效果和文字大小三个偏好，
+相应地删除了 `ThemeKind`、`TextScale`、`Motion::reduced` 以及 516–518 三个命令。
 
 ---
 
@@ -627,9 +533,8 @@ fn dark_theme_text_meets_aa() {
 
 ### 5.2 可缩放字体
 
-* 4 档偏好（0.875 / 1.0 / 1.125 / 1.25），运行时切换（`Ctrl+E`），可持久化到 `Settings`。
-* 字号统一走 `TextRole`，因此**所有文字同比缩放**，没有遗漏的硬编码尺寸。
-* 侧栏是**固定逻辑宽度**，字号放大到 1.25× 仍能容纳（数字用等宽字体，最大 5 位）。
+* 字体大小固定，不再提供运行时缩放偏好。
+* 字号统一走 `TextRole`，没有零散的硬编码尺寸。
 
 ### 5.3 减少动效
 
@@ -642,10 +547,10 @@ fn dark_theme_text_meets_aa() {
 
 | 项 | 做法 |
 |---|---|
-| 色觉友好 | 颜色 + **形状**双通道（原作"使用形状"精灵组天然提供） |
-| 键盘可达 | 所有交互有键盘等价物（`F3/F4/F5/F6` 等沿用原作快捷键） |
+| 色觉友好 | 7 色之间保持 ≥1.10 的灰度分离（构建时断言） |
+| 键盘可达 | 所有交互有键盘等价物（`F1/F4/F5/F10`、`Alt+F9` 等） |
 | 焦点可见 | `outline_strong` 2 px 焦点环 |
-| 点击目标 | 最小 36 逻辑 px（`DesignTokens::hit_target`） |
+| 点击目标 | 最小 36 逻辑 px |
 | 不闪 | 没有任何 >3 Hz 的闪烁（WCAG 2.3.1） |
 | 语言 | 文案全部走资源层，可 i18n |
 

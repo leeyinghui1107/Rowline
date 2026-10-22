@@ -59,7 +59,7 @@ rust/
     │   └── src/
     │       ├── lib.rs            WindowBackend / Clock / FileSystem / IoError
     │       ├── headless.rs       无窗口实现（CI / 回放）
-    │       └── winit_backend.rs  winit 事件 → InputEvent 翻译
+    │       └── headless.rs       无窗口后端（回放/测试）
     │
     ├── render/          rowline-render     渲染抽象 + wgpu / softbuffer 后端
     │   ├── Cargo.toml
@@ -68,7 +68,7 @@ rust/
     │       ├── wgpu_backend.rs   GPU 后端（WGSL 着色器）
     │       └── softbuffer_backend.rs  CPU 后端（像素级参考）
     │
-    ├── assets/          rowline-assets    资源加载：AssetLoader / SpriteSheet / GridSpec
+    ├── assets/          rowline-assets    内嵌素材：SpriteSheet / PNG 解码 / 字体
     │   ├── Cargo.toml
     │   └── src/lib.rs
     │
@@ -143,9 +143,6 @@ pub struct GameState {
     pub board: Board,
     pub selected: Option<usize>,
     pub path: Vec<usize>,
-    pub show_next: bool,
-    pub show_statistics: bool,
-    pub use_figures: bool,
     pub next_group: [u8; 3],
     pub sheet_scale: u32,
     pub layout: Layout,
@@ -240,13 +237,11 @@ pub trait Renderer {
 ### 3.8 `assets` —— 资源边界
 
 ```rust
-pub trait AssetLoader {
-    fn load_sheet(&mut self, key: &AssetKey, grid: GridSpec) -> Result<SpriteSheet, AssetError>;
-    fn load_bytes(&mut self, key: &AssetKey) -> Result<Vec<u8>, AssetError>;
-}
-
-pub struct GridSpec { pub cell: u32, pub cols: u32, pub rows: u32, pub origin_y: u32 }
-impl GridSpec { pub const ORIGINAL: GridSpec = GridSpec { cell: 36, cols: 16, rows: 10, origin_y: 225 }; }
+// 素材全部通过 include_bytes! 编入可执行文件。
+pub fn embedded_sheet(scale: u32) -> Option<&'static [u8]>;
+pub fn embedded_icons(scale: u32) -> Option<&'static [u8]>;
+pub fn embedded_font() -> &'static [u8];
+pub fn embedded_sheet_image(scale: u32) -> Result<SpriteSheet, AssetError>;
 ```
 
 **索引契约**（`docs/05`）在类型层面被强制：
@@ -383,7 +378,7 @@ renderer.end();
 | 顶点 | `pos(clip) + uv + tint`，6 顶点/四边形，写入常驻 `VERTEX|COPY_DST` buffer |
 | 着色器 | WGSL，`textureSample(sheet, samp, uv) * tint` |
 | HiDPI | `scale` 参与 clip 变换，逻辑像素 → 物理像素只在这一处换算 |
-| 文本 | **未接字体管线**，暂用占位方块（`RenderCmd::Text` 已在抽象里就位，接 `ab_glyph` 即可） |
+| 文本 | `ab_glyph` 动态字形图集，按 DPR 栅格化；内嵌 WenQuanYi Micro Hei（拉丁 + CJK，Apache-2.0） |
 
 ### 6.5 softbuffer 后端与软件画布
 
@@ -418,7 +413,7 @@ renderer.end();
 |---|---|---|
 | winit / wgpu 版本漂移（本次即遇到 API 变更 3 轮） | **高** | 锁定 `Cargo.lock`；CI 里 `cargo update --dry-run` 报警；后端隔离在单个文件，升级影响面可控 |
 | `raw-window-handle` 版本错配 | **高** | wgpu 30 与 winit 0.30 都用 **0.6**，已验证；升级任一方时**先查这个** |
-| 文本渲染缺失 | 中 | 抽象已就位；接 `ab_glyph` 或内置位图字体 |
+| ~~文本渲染缺失~~ | ✅ | 已接 `ab_glyph` 并内嵌中英文字体，不再依赖系统字体 |
 | `core` 被污染（长出依赖/unsafe） | 中 | `cargo tree` 检查 + `no_std` 编译测试进 CI |
 | 语义定标导致三方分歧 | 中 | 四方差分门当场报警 |
 | HiDPI 下 36 px 网格错位 | 中 | 逻辑/物理像素分离；渲染前用 `geometry.py` 校验 |
@@ -431,7 +426,7 @@ renderer.end();
 |---|---|
 | `docs/03_FEATURE_SPEC.md` | `core` 的**唯一行为契约** |
 | `docs/04_FIDELITY_MATRIX.md` | 决定 trait 粒度与哪些能力要做 |
-| `docs/05_ART_SPEC.md` | `assets::GridSpec` / `SpriteSheet::ball` 的契约 |
+| `docs/05_ART_SPEC.md` | 图集网格与源矩形契约（渲染侧 `view::ball_src`） |
 | `docs/07_RUST_ARCHITECTURE.md` | 前一版（逻辑层架构）；本文档是**完整工程架构**，取代之 |
 | `tools/blackbox/README.md` | 黑盒数据如何回填 `RuleModel` |
 | `docs/06_IMPLEMENTATION_STATUS.md` | 里程碑现状 |

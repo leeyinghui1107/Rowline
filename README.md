@@ -63,10 +63,27 @@ make test       # 布局门 + 四方差分门（Python / C / Rust / golden）
 make app        # SDL2 应用（需要 SDL2）
 make sheet      # 重新生成精灵图集
 make icons      # 重新生成图标与噪点
-make package    # 编译 release 并打包当前平台（dist/*.zip）
+make package    # 编译 release 并打包当前平台（macOS: Rowline.app；其它: 可执行文件 + zip）
+make cross      # macOS 本机交叉编译三平台单文件（macOS / Windows / Linux）
 make dist       # 同上；检测到 gh 时再构建其余平台
 make dist-ci    # 三平台全部由 GitHub Actions 构建并下载到 dist/
 ```
+
+> **macOS 本机三平台构建**：`make cross` 不需要 Linux 机器或 Docker。
+> 它用 Apple 工具链产出 macOS universal，用 mingw-w64 产出 Windows `.exe`，
+> 用 Rust 自带的 `rust-lld` + musl 产出**静态** Linux ELF。
+> 产物：`dist/rowline-darwin/Rowline.app`、`dist/rowline-win32/rowline.exe`、
+> `dist/rowline-linux/rowline`（以及各自的 zip）。
+> 首次运行会自动 `rustup target add`；Windows 交叉编译需要
+> `brew install mingw-w64`。
+
+> **macOS 启动方式**：产物是 `dist/rowline-darwin/Rowline.app`。双击即可启动，
+> **不会附带 Terminal 窗口**；等价命令是 `open Rowline.app`。不要直接双击
+> `Contents/MacOS/rowline`，那样仍会由 Terminal 托管。Linux / Windows 则直接运行
+> 裸可执行文件。
+>
+> `.app` 使用 ad-hoc 签名（未公证）。从网络下载 zip 后首次启动若被 Gatekeeper
+> 拦截，右键 → 打开，或在“系统设置 → 隐私与安全性”中放行。
 
 > **Windows 无需先配环境**：`make` 在 Windows 上把 Python 交给
 > `tools/win/py.ps1`、把 cargo 交给 `tools/win/cargo.ps1`，两者都会自动定位
@@ -92,7 +109,7 @@ make dist-ci    # 三平台全部由 GitHub Actions 构建并下载到 dist/
 ```bash
 cargo build --release -p rowline-tools
 ./rust/target/release/rowline-shot --out shot.png --width 1280 --height 900
-./rust/target/release/rowline-shot --out light.png --theme light --scenario scoreboard
+./rust/target/release/rowline-shot --out scores.png --scenario scoreboard
 ```
 
 Rust 侧：
@@ -100,7 +117,7 @@ Rust 侧：
 ```bash
 cd rust
 cargo build --release --workspace --all-features
-cargo test --release --workspace --all-features     # 166 项（含 doc-test）
+cargo test --release --workspace --all-features     # 140 项（含 doc-test）
 cargo clippy --workspace --all-features -- -D warnings
 ```
 
@@ -122,13 +139,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\win\verify.ps1
 ## 关键结论速览
 
 - **默认外观 = 原作 Classic**：`#F0F0F0` 菜单/HUD、黑色棋盘区、`#C0C0C0`
-  Win95 立体格、原作 7 色球；默认窗口为 **604×396 客户区**（372 内容 +
-  20 自绘菜单 + 4 底部边框预留；原作外层 620×430、客户区 604×371），
-  屏幕居中，几何随存档恢复；HiDPI 输入按 `Viewport` 反算为逻辑坐标（200% 实机验证）
+  Win95 立体格、原作精灵球；菜单为 `文件 / 帮助`，统计、帮助、关于、总榜、
+  名字输入统一为带 × 与“关闭/确定”的方形模态卡片。默认客户区 **760×480**，
+  屏幕居中，几何随存档恢复。只保留这一套默认主题，不提供主题切换。
+  HiDPI 输入按 `Viewport` 反算为逻辑坐标（200% 实机验证）
 - **角色高度 = 分数**：左右同一比例尺（记录 = 整列 2/3），挑战者随本局分数升高、
   超过记录时高于国王并在 150% 封顶；新纪录后按新比例重算，国王“降到 0 再升起”、
   挑战者同时回落（详见 docs/03 §3.1b）
-- **单文件发布**：素材编入 exe，**2.93 MB**，无需 `assets/` 目录；`opt-level="z"` +
+- **单文件发布**：素材与中英文字体编入 exe，**约 7.2 MB**（其中 5.2 MB 是内嵌字体），
+  无需 `assets/` 目录，也不依赖系统 CJK 字体；macOS 包成 `Rowline.app`，双击启动无终端窗口；
+  `opt-level="z"` +
   fat LTO + strip + 按平台裁剪后端 + 自写文本存档。无 DX12 的机器（部分虚拟机/
   老显卡）可用 `cargo build --release -p rowline-app --features vulkan` 一并链接 Vulkan
 - **原生 Win32 C/C++**（Borland/Turbo 链接器 2.18），32 位 x86，**无壳、无混淆、无 .NET、无游戏引擎**
@@ -139,12 +159,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\win\verify.ps1
 - 布局（反汇编 + 实机 604×371 确认）：棋盘 `x=(W−328)/2`、`y=(H−376)/2+46`，外框 327×328；
   左右角色 `((W−328)/2−58)/2` / `t+328+((t−58)/2)`；最小客户区 444×372
   （`[0x40B078]=(W−108)/2` 是**预览球组**的 X，见 `docs/11` §5d）
-- 菜单（已精确解析 276/276 字节 + 加速键交叉校验）：**简体中文**，`文件(&F)` / `选项(&O)`
-- 命令 ID：256 新建(F4) / 257 高分榜 / 258 退出(Alt+F9) / 512 下一组(F3→ShowNext) / 513 显示统计(F5) / 514 使用形状(F6→UseFigures) / 768 内容(F1) / 769 关于
-- 统计窗口（已由实机确认）：独立非模态窗口，8 行（空格子 + 7 色），
-  `数量 (百分比%)`，球色行追加 `,消除-N`；百分比 = `数量×100/81`（向下取整），
-  `N` 为本局该颜色累计消除数（`0x401C7A`），默认关闭
-- 重设计扩展：`选项 · 固定分辨率`（id 515，等价于 `Ctrl+R`）；原作没有这个菜单项
+- 原作菜单（已精确解析 276/276 字节 + 加速键交叉校验）：**简体中文**，
+  `文件(&F)` / `选项(&O)`；命令 ID 256 新建(F4) / 257 高分榜 / 258 退出(Alt+F9) /
+  512 下一组(F3→ShowNext) / 513 显示统计(F5) / 514 使用形状(F6→UseFigures) /
+  768 内容(F1) / 769 关于
+- 最终菜单：`文件`（新游戏 / 高分榜 / 显示统计 / 退出）、`帮助`（帮助主题 / 关于）。
+  **移除了**原作的“下一组”开关（该设置从未被读取，实际预览一直在 HUD 中）、
+  “使用形状”、“固定分辨率”、重复的“内容”入口，以及`视图`菜单里的主题切换、
+  动态效果和文字大小三项；帮助/关于/统计均为可关闭的模态卡片
+- 统计窗口（已由实机确认）：8 行（空格子 + 7 色），数量、占比与
+  `消除-N`；百分比 = `数量×100/81`（向下取整），`N` 为本局该颜色累计消除数
+  （`0x401C7A`）。重设计后改为居中模态卡片，不再与棋盘重叠
 - 高分榜（已确认）：注册表 `HKCU\...\HighScore`，`Table`=512 B（16×32 B，姓名+28 B / 分数+0x1C），`Hash`=16 B
 - 随机源（已确认）：Borland LCG `state*0x41C64E6D+0x3039`，以 `GetTickCount()` 播种
 - **无音频**；`winlines.res`/`lines.res` 为**死字符串**（全文件零引用）
@@ -155,3 +180,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\win\verify.ps1
 `assets/png/`、`assets/resources/` 是从原作 EXE 提取的受版权保护资产，**仅供研究参考，不得分发**，
 已由 `.gitignore` 隔离。重构版使用**本仓库自行生成**的素材（精灵图集 / 图标 / 噪点）与**自有名称**（Rowline），
 不得包含原作的任何美术、代码或数据。详见 `REPORT.md` §5 与 `docs/04`。
+
+内嵌 UI 字体为 **WenQuanYi Micro Hei 0.2.0-beta**（拉丁 + CJK），
+以 **Apache License 2.0** 授权，见 `assets/font/NOTICE.txt` 与
+`assets/font/LICENSE-APACHE-2.0.txt`。

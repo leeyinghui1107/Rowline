@@ -26,18 +26,6 @@ pub struct Settings {
     pub window_y: i32,
     pub window_width: u32,
     pub window_height: u32,
-    pub window_maximized: bool,
-    pub show_next: bool,
-    pub show_statistics: bool,
-    pub use_figures: bool,
-    /// The colour theme: `0` = dark, `1` = light, `2` = classic (default).
-    pub theme: u8,
-    /// `true` when the user asked for reduced motion.
-    pub reduced_motion: bool,
-    /// The text size preference: `0..=3`.
-    pub text_scale: u8,
-    /// `true` when the fixed-resolution ("retro") scaling policy is on.
-    pub retro_mode: bool,
 }
 
 impl Default for Settings {
@@ -47,24 +35,21 @@ impl Default for Settings {
             // original does when its INI has no WindowX/WindowY yet.
             window_x: -1,
             window_y: -1,
-            // The original's default outer size is 620x430, i.e. a 604x371
-            // client.  Rowline draws its menu inside the client, so the
-            // stored height includes the 20 px menu strip.
-            window_width: 604,
-            window_height: 396,
-            window_maximized: false,
-            show_next: true,
-            // The original ships with ShowStatistics=0: the statistics
-            // window is opt-in (F5 / 选项 · 显示统计).
-            show_statistics: false,
-            use_figures: false,
-            theme: 2,
-            reduced_motion: false,
-            text_scale: 1,
-            retro_mode: false,
+            // A roomier default than the original 604x371 client: the
+            // redesign keeps the board at its calibrated size and uses the
+            // extra space for breathing room around it.  The stored height
+            // includes the drawn menu strip.
+            window_width: 760,
+            window_height: 480,
         }
     }
 }
+
+/// The current on-disk format version.
+///
+/// Version 3 persists only the window geometry; the theme and the
+/// motion/text-size preferences were removed with the redesign.
+pub const SAVE_VERSION: u32 = 3;
 
 /// Everything that gets persisted.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -169,7 +154,7 @@ pub mod legacy {
 /// Build the save data that corresponds to the current settings and scores.
 pub fn capture(settings: Settings, scores: Vec<ScoreRecord>) -> SaveData {
     SaveData {
-        version: 1,
+        version: SAVE_VERSION,
         scores,
         settings,
     }

@@ -34,11 +34,6 @@ impl Lcg {
         Lcg { state: seed }
     }
 
-    /// Replace the current state (equivalent to `srand`).
-    pub fn seed(&mut self, seed: u32) {
-        self.state = seed;
-    }
-
     /// Current internal state (useful for reproducibility assertions).
     pub const fn state(&self) -> u32 {
         self.state

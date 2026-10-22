@@ -536,25 +536,14 @@ mod tests {
 mod text_tests {
     use super::*;
 
-    fn system_font() -> Option<Vec<u8>> {
-        const CANDIDATES: &[&str] = &[
-            "/System/Library/Fonts/Supplemental/Arial.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "C:\\Windows\\Fonts\\arial.ttf",
-        ];
-        for p in CANDIDATES {
-            if let Ok(b) = std::fs::read(p) {
-                return Some(b);
-            }
-        }
-        None
+    fn test_font() -> Vec<u8> {
+        rowline_assets::embedded_font().to_vec()
     }
 
     #[test]
     fn text_is_drawn() {
-        let Some(bytes) = system_font() else { return };
         let mut c = SoftwareCanvas::new(200, 60);
-        c.set_font(bytes);
+        c.set_font(test_font());
         c.submit(RenderCmd::Clear(Color::BLACK));
         c.submit(RenderCmd::Text {
             text: "NEXT".to_string(),

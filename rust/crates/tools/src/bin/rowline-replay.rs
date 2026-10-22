@@ -106,7 +106,9 @@ fn main() -> ExitCode {
                 );
             }
             Op::SetUseFigures(v) => {
-                eng.set_use_figures(*v != 0);
+                // The polygon sprite set was removed from the product.  The
+                // trace op is kept as an inert note so old recorded traces
+                // still replay and the four-way gate keeps its fixtures.
                 let _ = writeln!(out, "note {} usefigures {v}", eng.step());
             }
         }

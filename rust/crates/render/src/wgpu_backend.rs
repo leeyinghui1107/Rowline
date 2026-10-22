@@ -509,11 +509,6 @@ impl<'w> WgpuRenderer<'w> {
         })
     }
 
-    /// The surface format the swap chain was configured with.
-    pub fn surface_format(&self) -> wgpu::TextureFormat {
-        self.surface_format
-    }
-
     /// Upload the sprite sheet.
     pub fn set_sheet(&mut self, rgba: &[u8], width: u32, height: u32) {
         let size = wgpu::Extent3d {
@@ -639,11 +634,6 @@ impl<'w> WgpuRenderer<'w> {
         self.rebuild_bind_group();
     }
 
-    /// The number of icons in the atlas.
-    pub fn icon_count(&self) -> u32 {
-        self.icon_count
-    }
-
     /// The sprite sheet's texture view.
     fn sheet_view(&self) -> wgpu::TextureView {
         self.sheet_view
@@ -748,22 +738,6 @@ impl<'w> WgpuRenderer<'w> {
                 desired_maximum_frame_latency: 2,
             },
         );
-    }
-
-    /// Set where the content is drawn inside the target.
-    pub fn set_content_rect_scaled(&mut self, rect: Rect, content_scale: f32) {
-        self.content_rect = rect;
-        self.content_scale = content_scale;
-    }
-
-    /// The physical pixels per logical unit.
-    pub fn content_scale(&self) -> f32 {
-        self.content_scale
-    }
-
-    /// The content rectangle, in physical pixels.
-    pub fn content_rect(&self) -> Rect {
-        self.content_rect
     }
 
     /// Push a quad given in **logical** units.

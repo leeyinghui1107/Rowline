@@ -10,9 +10,10 @@
 //! * the **physical** coordinate system, in which the GPU works.  This is
 //!   what the swap chain is sized in.
 //!
-//! On top of that sits a second decision: should the content fill the
-//! window ([`ScalePolicy::Logical`]) or should it keep a fixed logical
-//! resolution and be scaled to fit ([`ScalePolicy::Fixed`])?
+//! The content always fills the window; the layout is recomputed for the
+//! client size.  There is deliberately no separate fixed-resolution mode:
+//! the board keeps its calibrated 36-logical-pixel cells and the window
+//! around it simply gains or loses margin.
 //!
 //! Everything in this crate is pure arithmetic: no I/O, no GPU, no window
 //! system.  That is what makes the whole adaptation matrix testable in CI.
@@ -20,5 +21,5 @@
 pub mod resample;
 pub mod viewport;
 
-pub use resample::{lanczos3_rgba, resample_rgba, select_variant};
-pub use viewport::{compute_viewport, Rect, ScalePolicy, Size, Viewport};
+pub use resample::select_variant;
+pub use viewport::{compute_viewport, Rect, Size, Viewport};

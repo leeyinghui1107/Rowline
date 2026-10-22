@@ -28,7 +28,11 @@ $candidates += Get-ChildItem 'C:\cargo\bin\cargo.exe', 'D:\cargo\bin\cargo.exe' 
 foreach ($exe in ($candidates | Select-Object -Unique)) {
     if (-not (Test-Path $exe)) { continue }
     $cargoHome = Split-Path -Parent (Split-Path -Parent $exe)
-    if (-not $env:CARGO_HOME) { $env:CARGO_HOME = $cargoHome }
+    if (-not $env:CARGO_HOME -and
+        ((Split-Path -Leaf $cargoHome) -in @('.cargo', 'cargo') -or
+         (Test-Path (Join-Path $cargoHome 'registry')))) {
+        $env:CARGO_HOME = $cargoHome
+    }
     if (-not $env:RUSTUP_HOME) {
         foreach ($rustup in @((Join-Path (Split-Path -Parent $cargoHome) 'rustup'),
                              'C:\rustup', 'D:\rustup', "$env:USERPROFILE\.rustup")) {

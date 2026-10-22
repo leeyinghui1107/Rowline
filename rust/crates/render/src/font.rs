@@ -132,16 +132,6 @@ impl FontAtlas {
         out
     }
 
-    /// The total advance width of a string, in logical units.
-    pub fn measure(&mut self, text: &str) -> f32 {
-        self.layout(text).iter().map(|(_, x)| x).sum::<f32>()
-            + self
-                .layout(text)
-                .last()
-                .map(|(g, _)| g.advance)
-                .unwrap_or(0.0)
-    }
-
     /// Get (rasterising if needed) the glyph for a character.
     pub fn glyph(&mut self, ch: char) -> PlacedGlyph {
         if let Some(g) = self.glyphs.get(&ch) {
@@ -256,37 +246,21 @@ mod tests {
         assert!(FontAtlas::new(vec![0u8; 16], 12.0, 2.0).is_err());
     }
 
-    /// A system font, if one can be found.
-    fn system_font() -> Option<Vec<u8>> {
-        const CANDIDATES: &[&str] = &[
-            "/System/Library/Fonts/Supplemental/Arial.ttf",
-            "/System/Library/Fonts/Helvetica.ttc",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/TTF/DejaVuSans.ttf",
-            "C:\\Windows\\Fonts\\arial.ttf",
-        ];
-        for p in CANDIDATES {
-            if let Ok(b) = std::fs::read(p) {
-                return Some(b);
-            }
-        }
-        None
+    /// The face the product embeds, so this test runs on every machine.
+    fn test_font() -> Vec<u8> {
+        rowline_assets::embedded_font().to_vec()
     }
 
     #[test]
     fn glyphs_are_rasterised_at_the_device_resolution() {
-        let Some(bytes) = system_font() else {
-            // No system font available: nothing to rasterise.
-            return;
-        };
-        let mut atlas = FontAtlas::new(bytes, 12.0, 2.0).unwrap();
+        let mut atlas = FontAtlas::new(test_font(), 12.0, 2.0).unwrap();
         assert!(!atlas.dirty());
         let g = atlas.glyph('A');
         assert!(atlas.dirty());
         assert!(g.advance > 0.0);
-        // Rasterised at 2x, so the glyph is roughly twice as tall as the
-        // nominal size in logical units.
-        assert!(g.rect.3 as f32 >= 12.0 * 1.2, "glyph height {}", g.rect.3);
+        // Rasterised at 2x and reported in logical units, so the cap height
+        // is at least the nominal size (faces differ in cap-height ratio).
+        assert!(g.rect.3 as f32 >= 12.0, "glyph height {}", g.rect.3);
         // The advance is reported in logical units, not device pixels.
         assert!(g.advance < 20.0, "advance {}", g.advance);
 
@@ -303,8 +277,7 @@ mod tests {
 
     #[test]
     fn the_atlas_image_actually_holds_the_glyphs() {
-        let Some(bytes) = system_font() else { return };
-        let mut atlas = FontAtlas::new(bytes, 20.0, 1.0).unwrap();
+        let mut atlas = FontAtlas::new(test_font(), 20.0, 1.0).unwrap();
         let g = atlas.glyph('A');
         eprintln!("glyph rect = {:?}", g.rect);
         let (ax, ay, w, h) = g.rect;
@@ -319,9 +292,16 @@ mod tests {
     }
 
     #[test]
+    fn the_embedded_font_covers_cjk() {
+        let mut atlas = FontAtlas::new(test_font(), 16.0, 1.0).unwrap();
+        let g = atlas.glyph('中');
+        assert!(g.advance > 0.0);
+        assert!(!g.is_empty(), "the embedded font has no CJK glyphs");
+    }
+
+    #[test]
     fn the_atlas_grows_when_it_runs_out_of_room() {
-        let Some(bytes) = system_font() else { return };
-        let mut atlas = FontAtlas::new(bytes, 24.0, 3.0).unwrap();
+        let mut atlas = FontAtlas::new(test_font(), 24.0, 3.0).unwrap();
         let before = atlas.height;
         // Fill the atlas with many distinct glyphs.
         for ch in (0x20u32..0x300).filter_map(char::from_u32) {

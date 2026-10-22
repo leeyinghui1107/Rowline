@@ -53,11 +53,6 @@ impl RecordingRenderer {
         RecordingRenderer::default()
     }
 
-    /// Every frame recorded so far.
-    pub fn frames(&self) -> &[Vec<RenderCmd>] {
-        &self.frames
-    }
-
     /// The commands of the most recent frame.
     pub fn last_frame(&self) -> &[RenderCmd] {
         self.frames.last().map(|f| f.as_slice()).unwrap_or(&[])

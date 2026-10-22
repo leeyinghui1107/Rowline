@@ -86,7 +86,6 @@
 pub struct Engine {
     board: Board,          // 唯一局面
     score: i64,
-    use_figures: bool,
     rng: Lcg,
     model: RuleModel,      // 全部"待定语义"集中于此
     step: u32,
@@ -195,13 +194,15 @@ pub trait Clock { fn now_millis(&self) -> u64; }
 | ID | 键 | 动作 | Rust 侧 |
 |---|---|---|---|
 | 256 | F4 | 新开一局 | `Engine::new_game()` |
-| 512 | F3 | 切换"显示下一组" | `settings.show_next` |
-| 513 | F5 | 切换统计窗口（8 行：数量 / 百分比 / `消除-N`） | `settings.show_statistics` + `Engine::colour_counts()` / `cleared_counts()` |
-| 514 | F6 | 切换形状精灵集 | `Engine::set_use_figures()` |
-| 515 | Ctrl+R | 切换固定分辨率显示策略（重设计扩展） | `Game::toggle_retro_mode()` → `take_viewport_dirty()` |
-| 768 | F1 | 打开帮助 | `platform::help::open()` |
-| 769 | — | 关于框 | `platform::dialog::about()` |
+| 257 | H | 高分榜 | `Overlay::Scoreboard` |
+| 513 | F5 | 统计模态卡片（8 行：数量 / 占比 / `消除-N`） | `Overlay::Statistics` + `Engine::colour_counts()` / `cleared_counts()` |
+| 16528 | F1 | 帮助模态卡片 | `Overlay::Help` |
+| 769 | — | 关于框 | `Overlay::About` |
 | 258 | Alt+F9 | 退出 | `Window::request_quit()` |
+
+> 重设计移除了原作的 512（下一组开关，设置从未被读取）、514（使用形状）、
+> 515（固定分辨率）和 768（内容，与帮助重复）。最终版本进一步移除了主题切换
+> （516）、减少动态（517）和文字大小（518），只保留一套原作 Classic 外观。
 
 ---
 

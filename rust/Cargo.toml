@@ -15,7 +15,11 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.75"
+# The actual floor of the dependency graph (image 0.25 -> moxcms ->
+# ordered-float 5.5 requires 1.90; wgpu 30 requires 1.87).  Keep this in sync
+# with `cargo metadata --filter-platform <target> --all-features`, not with
+# the oldest toolchain that happens to compile the core crate alone.
+rust-version = "1.90"
 license = "MIT OR Apache-2.0"
 authors = ["Rowline contributors"]
 
@@ -27,7 +31,7 @@ rowline-storage = { path = "crates/storage" }
 rowline-platform = { path = "crates/platform" }
 rowline-render = { path = "crates/render" }
 rowline-assets = { path = "crates/assets" }
-rowline-app = { path = "crates/app" }
+rowline-app = { path = "crates/app", default-features = false }
 
 # The core crate has NO external dependencies on purpose:
 #   * the differential replay gate must stay hermetic and reproducible

@@ -1,16 +1,15 @@
 //! Platform abstraction.
 //!
-//! The game talks to the outside world through four traits:
+//! The game talks to the outside world through three traits:
 //!
 //! | trait | answers |
 //! |---|---|
 //! | [`WindowBackend`] | what are the window's size and the pending events? |
 //! | [`Clock`] | what time is it? |
 //! | [`FileSystem`] | where is the app's data directory, and how do I read/write? |
-//! | [`Assets`] | which files exist? (see `rowline-assets`) |
 //!
 //! Everything above this layer is platform neutral, which is what makes the
-//! game testable without a window and portable to every target winit
+//! game testable without a window and portable to every target the shell
 //! supports.
 
 use std::path::{Path, PathBuf};
@@ -214,15 +213,11 @@ impl FileSystem for MemoryFileSystem {
 }
 
 pub mod headless;
-#[cfg(feature = "winit")]
-pub mod winit_backend;
 
 pub use headless::HeadlessWindow;
 
 /// The product's name, re-exported for the window title.
 pub use rowline_core::PRODUCT_NAME;
-#[cfg(feature = "winit")]
-pub use winit_backend::WinitWindow;
 
 #[cfg(test)]
 mod tests {

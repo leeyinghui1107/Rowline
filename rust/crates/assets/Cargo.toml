@@ -1,6 +1,6 @@
 [package]
 name = "rowline-assets"
-description = "Asset loading: sprite sheets, fonts and data files"
+description = "Assets embedded in the executable: sprite sheet, icons and font"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,12 +8,4 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-rowline-core.workspace = true
-rowline-display.workspace = true
 image = { version = "0.25", default-features = false, features = ["png"] }
-
-[features]
-default = []
-# Decode formats beyond PNG.
-jpg = ["image/jpeg"]
-bmp = ["image/bmp"]

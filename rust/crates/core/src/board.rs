@@ -62,15 +62,6 @@ impl Board {
         }
     }
 
-    /// A board with the given cells (row-major, exactly [`BOARD_CELLS`] long).
-    pub fn from_slice(cells: &[Cell]) -> Self {
-        let mut b = Board::new();
-        for (i, &v) in cells.iter().take(BOARD_CELLS).enumerate() {
-            b.cells[i] = v;
-        }
-        b
-    }
-
     /// The raw cells.
     pub fn cells(&self) -> &[Cell; BOARD_CELLS] {
         &self.cells

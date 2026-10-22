@@ -9,7 +9,7 @@
 //! screenshot can be compared against a reference.
 //!
 //! ```text
-//! rowline-shot --out shot.png --width 1280 --height 900 --theme dark
+//! rowline-shot --out shot.png --width 1280 --height 900
 //! rowline-shot --out board.png --scenario board --scale 2
 //! ```
 
@@ -41,7 +41,11 @@ enum Scenario {
     AfterRecord,
     /// The name-entry dialog.
     NameEntry,
-    /// A game in progress with the statistics window open.
+    /// An open dropdown, for checking the menu design.
+    Menu,
+    /// The help dialog.
+    Help,
+    /// A game in progress with the statistics dialog open.
     Stats,
     /// A just-completed five-ball clear, captured mid-dissolve.
     Clear,
@@ -52,7 +56,6 @@ fn main() {
     let mut width = 1280.0_f32;
     let mut height = 900.0_f32;
     let mut scale = 1.0_f32;
-    let mut theme = String::from("classic");
     let mut scenario = Scenario::New;
     let mut seed = 7_u32;
 
@@ -65,7 +68,6 @@ fn main() {
             "--height" => height = value().parse().unwrap_or(height),
             "--scale" => scale = value().parse().unwrap_or(scale),
             "--seed" => seed = value().parse().unwrap_or(seed),
-            "--theme" => theme = value(),
             "--scenario" => {
                 scenario = match value().as_str() {
                     "board" => Scenario::Board,
@@ -75,6 +77,8 @@ fn main() {
                     "record" => Scenario::Record,
                     "afterrecord" => Scenario::AfterRecord,
                     "nameentry" => Scenario::NameEntry,
+                    "menu" => Scenario::Menu,
+                    "help" => Scenario::Help,
                     "stats" => Scenario::Stats,
                     "clear" => Scenario::Clear,
                     _ => Scenario::New,
@@ -83,8 +87,8 @@ fn main() {
             "--help" | "-h" => {
                 eprintln!(
                     "usage: rowline-shot [--out FILE] [--width N] [--height N] \
-                     [--scale N] [--theme classic|dark|light] [--scenario new|board|\
-                     scoreboard|about|gameover|nameentry|stats|clear] [--seed N]"
+                     [--scale N] [--scenario new|board|scoreboard|about|gameover|\
+                     nameentry|menu|help|stats|clear] [--seed N]"
                 );
                 return;
             }
@@ -95,13 +99,11 @@ fn main() {
         }
     }
 
+    let width = width.max(1.0);
+    let height = height.max(1.0);
+    let scale = scale.max(1.0);
+
     let mut game = Game::new(seed, RuleModel::default());
-    match theme.as_str() {
-        "dark" => game.set_theme(rowline_theme::ThemeKind::Dark),
-        "light" => game.set_theme(rowline_theme::ThemeKind::Light),
-        // Classic is the product default.
-        _ => {}
-    }
     let sheet = load_sheet(scale);
     if let Some((_image, sheet_scale)) = &sheet {
         game.set_sheet_scale(*sheet_scale);
@@ -146,6 +148,13 @@ fn main() {
             game.engine_mut().set_score(42);
             game.offer_name_entry();
         }
+        Scenario::Menu => {
+            // The 视图 dropdown, where the new view preferences live.
+            game.menu.toggle(0);
+        }
+        Scenario::Help => {
+            game.run_command(rowline_app::commands::Command::HELP);
+        }
         Scenario::Stats => {
             game.engine_mut().new_game();
             game.run_command(rowline_app::commands::Command::TOGGLE_STATISTICS);
@@ -166,11 +175,10 @@ fn main() {
                 rowline_core::input::Point::new(x as f32 + 18.0, y as f32 + 18.0)
             };
             // The offline shot wants the dissolve, not a frozen mid-move:
-            // apply the engine move immediately, then restore animations.
-            game.toggle_reduced_motion();
+            // apply the engine move immediately.
             game.click_at(cell(5, 4), layout);
             game.click_at(cell(4, 4), layout);
-            game.toggle_reduced_motion();
+            game.finish_move_animation(layout);
         }
     }
 
@@ -243,15 +251,8 @@ fn load_icons() -> Option<rowline_assets::IconStrip> {
     None
 }
 
-/// A font: the bundled one, or a system font.
+/// The font compiled into the tool (same face as the game), so an offline
+/// render never depends on the host's installed fonts.
 fn load_font() -> Option<Vec<u8>> {
-    for dir in ["assets", "../assets", "../../assets"] {
-        let p = std::path::Path::new(dir).join("font.ttf");
-        if p.exists() {
-            if let Ok(b) = std::fs::read(&p) {
-                return Some(b);
-            }
-        }
-    }
-    rowline_assets::resolve_system_font().map(|(b, _)| b)
+    Some(rowline_assets::embedded_font().to_vec())
 }

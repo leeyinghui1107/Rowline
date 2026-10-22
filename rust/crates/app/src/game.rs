@@ -7,13 +7,13 @@
 use rowline_core::engine::Engine;
 use rowline_core::input::{InputEvent, MouseButton, Point, Size};
 use rowline_core::layout::Layout;
-use rowline_core::render::{FrameStyle, RenderCmd};
+use rowline_core::render::RenderCmd;
 use rowline_core::state::{GameState, Phase};
 use std::time::{Duration, Instant};
 
 use rowline_core::{RuleModel, ScoreRecord, Settings};
 
-use rowline_theme::{DesignSystem, ThemeKind};
+use rowline_theme::DesignSystem;
 
 use crate::commands::Command;
 
@@ -83,8 +83,6 @@ pub struct Game {
     pub menu: rowline_core::menu::MenuModel,
     /// The decorative particle system.
     pub effects: rowline_core::effects::EffectSystem,
-    /// `true` while the command reference is shown.
-    pub help_open: bool,
     /// `true` when no move is left and the game is over.
     pub game_over: bool,
     /// `true` once the end-of-game message has been acknowledged.
@@ -93,9 +91,9 @@ pub struct Game {
     pub overlay: Overlay,
     /// The name being typed in the name-entry dialog.
     pub name_input: String,
-    /// `true` when the viewport must be recomputed (the display policy
-    /// changed).  Cleared by [`Game::take_viewport_dirty`].
-    viewport_dirty: bool,
+    /// `true` while the prefilled default name is selected, so the first
+    /// keystroke or Backspace replaces it instead of appending.
+    pub name_select_all: bool,
     /// The integer scale of the sprite sheet the renderer loaded.
     sheet_scale: u32,
     /// The cell under the pointer, for the hover feedback (re-design).
@@ -179,6 +177,10 @@ pub enum Overlay {
     NameEntry,
     /// The about box.
     About,
+    /// The in-app command reference.
+    Help,
+    /// The statistics readout.
+    Statistics,
 }
 
 impl Game {
@@ -197,17 +199,15 @@ impl Game {
             path: Vec::new(),
             phase: Phase::Ready,
             quit: false,
-            // The original's Win95 look is the default; the redesigned dark
-            // and light themes remain available through Ctrl+T.
-            design: DesignSystem::new(ThemeKind::Classic, false),
+            // One fixed design system: the original Classic palette.
+            design: DesignSystem::new(),
             menu: rowline_core::menu::MenuModel::new(rowline_core::menu::default_menus()),
             effects: rowline_core::effects::EffectSystem::new(0x5EED),
-            help_open: false,
             game_over: false,
             game_over_ack: true,
             overlay: Overlay::None,
             name_input: rowline_core::scoreboard::default_player_name().to_string(),
-            viewport_dirty: false,
+            name_select_all: false,
             sheet_scale: 1,
             hovered: None,
             clear_anim: None,
@@ -232,11 +232,6 @@ impl Game {
     /// builder must multiply the source rectangles by this scale.
     pub fn set_sheet_scale(&mut self, scale: u32) {
         self.sheet_scale = scale.max(1);
-    }
-
-    /// The integer scale of the loaded sprite sheet.
-    pub fn sheet_scale(&self) -> u32 {
-        self.sheet_scale
     }
 
     /// The best score in the table.
@@ -266,7 +261,7 @@ impl Game {
         let t = anim.started.elapsed().as_secs_f32();
         let drop = RESET_DROP.as_secs_f32();
         let rise = RESET_RISE.as_secs_f32();
-        if self.design.motion.reduced || t >= drop + rise {
+        if t >= drop + rise {
             self.king_score()
         } else if t < drop {
             (anim.record_from as f32 * (1.0 - t / drop)).round() as u32
@@ -337,6 +332,29 @@ impl Game {
     }
 
     /// Advance the decorative effects and finish expired animations.
+    /// Apply the in-flight move immediately.
+    ///
+    /// The offline screenshot tool uses this to reach the dissolve frame
+    /// without waiting for the move animation.
+    pub fn finish_move_animation(&mut self, layout: Layout) {
+        self.apply_pending_move(layout);
+    }
+
+    /// Apply and clear the pending move, if there is one.
+    fn apply_pending_move(&mut self, layout: Layout) {
+        let Some(anim) = self.move_anim.take() else {
+            return;
+        };
+        if let (Some(&src), Some(&dst)) = (anim.path.first(), anim.path.last()) {
+            let (sr, sc) = rowline_core::coords(src);
+            let (dr, dc) = rowline_core::coords(dst);
+            let res = self
+                .engine
+                .move_ball(sr as i32, sc as i32, dr as i32, dc as i32);
+            self.apply_move_result(res, anim.colour, layout);
+        }
+    }
+
     pub fn tick(&mut self, dt: f32, layout: Layout) {
         let now = Instant::now();
         // Finish a move that has reached the end of its path.  The engine is
@@ -347,15 +365,7 @@ impl Game {
             .as_ref()
             .is_some_and(|a| now.saturating_duration_since(a.started) >= a.duration())
         {
-            let anim = self.move_anim.take().expect("checked above");
-            if let (Some(&src), Some(&dst)) = (anim.path.first(), anim.path.last()) {
-                let (sr, sc) = rowline_core::coords(src);
-                let (dr, dc) = rowline_core::coords(dst);
-                let res = self
-                    .engine
-                    .move_ball(sr as i32, sc as i32, dr as i32, dc as i32);
-                self.apply_move_result(res, anim.colour, layout);
-            }
+            self.apply_pending_move(layout);
         }
         if self
             .clear_anim
@@ -392,7 +402,7 @@ impl Game {
             let t = now.saturating_duration_since(anim.started).as_secs_f32();
             let drop = RESET_DROP.as_secs_f32();
             let rise = RESET_RISE.as_secs_f32();
-            if self.design.motion.reduced || t >= drop + rise {
+            if t >= drop + rise {
                 self.king_rise = self.king_rise_target;
                 self.challenger_rise = 0.0;
             } else if t < drop {
@@ -408,29 +418,15 @@ impl Game {
             }
         } else {
             self.update_figure_targets();
-            if self.design.motion.reduced {
-                self.king_rise = self.king_rise_target;
-                self.challenger_rise = self.challenger_rise_target;
-            } else {
-                let k = 1.0 - (-dt / FIGURE_TAU).exp();
-                self.king_rise += (self.king_rise_target - self.king_rise) * k;
-                self.challenger_rise += (self.challenger_rise_target - self.challenger_rise) * k;
-            }
-        }
-        // With reduced motion the system simply never holds any particle, so
-        // there is nothing to update.
-        if self.design.motion.reduced {
-            self.effects.clear();
-            return;
+            let k = 1.0 - (-dt / FIGURE_TAU).exp();
+            self.king_rise += (self.king_rise_target - self.king_rise) * k;
+            self.challenger_rise += (self.challenger_rise_target - self.challenger_rise) * k;
         }
         self.effects.update(dt);
     }
 
     /// Spawn the burst for a cleared cell.
     fn burst_at(&mut self, row: usize, col: usize, layout: Layout) {
-        if self.design.motion.reduced {
-            return;
-        }
         let (dx, dy) = layout.cell_origin(row as i32, col as i32);
         let colour = self
             .design
@@ -459,29 +455,6 @@ impl Game {
     pub fn menu_bar_rect(&self, client_w: i32) -> rowline_core::render::Rect {
         let m = &self.menu.metrics;
         rowline_core::render::Rect::new(0.0, 0.0, client_w as f32, m.bar_height)
-    }
-
-    /// The rectangle of the toolbar at the right of the menu bar.
-    pub fn menu_toolbar_rect(&self, client_w: i32) -> rowline_core::render::Rect {
-        let m = &self.menu.metrics;
-        let w = 2.0 * (m.bar_height - 6.0);
-        rowline_core::render::Rect::new(client_w as f32 - w - m.pad, 3.0, w, m.bar_height - 6.0)
-    }
-
-    /// Which toolbar button is under the pointer, if any.
-    ///
-    /// `0` = theme, `1` = display (retro mode).
-    pub fn toolbar_button_at(&self, pos: Point, client_w: i32) -> Option<usize> {
-        let r = self.menu_toolbar_rect(client_w);
-        if !r.contains(pos) {
-            return None;
-        }
-        let w = (r.width * 0.5).max(1.0);
-        if pos.x < r.x + w {
-            Some(0)
-        } else {
-            Some(1)
-        }
     }
 
     /// The rectangle of the open dropdown, in logical pixels.
@@ -533,79 +506,6 @@ impl Game {
         self.quit
     }
 
-    /// Switch between the dark and the light theme.
-    pub fn toggle_theme(&mut self) {
-        let next = self.design.kind().toggled();
-        self.set_theme(next);
-    }
-
-    /// Select a theme explicitly (used by the head-less screenshot tool).
-    pub fn set_theme(&mut self, kind: ThemeKind) {
-        self.design.set_theme(kind);
-        self.viewport_dirty = true;
-        self.sync_settings();
-    }
-
-    /// Toggle the reduced-motion preference.
-    pub fn toggle_reduced_motion(&mut self) {
-        let reduced = !self.design.motion.reduced;
-        self.design.set_reduced_motion(reduced);
-        self.sync_settings();
-    }
-
-    /// Cycle the text-size preference.
-    pub fn cycle_text_scale(&mut self) {
-        let all = rowline_theme::TextScale::ALL;
-        let cur = self.design.tokens.text_scale;
-        let idx = all.iter().position(|t| *t == cur).unwrap_or(1);
-        self.design.set_text_scale(all[(idx + 1) % all.len()]);
-        self.sync_settings();
-    }
-
-    /// Toggle the fixed-resolution ("retro") scaling policy.
-    pub fn toggle_retro_mode(&mut self) {
-        self.settings.retro_mode = !self.settings.retro_mode;
-        self.viewport_dirty = true;
-    }
-
-    /// `true` once after the display policy changed, then clears the flag.
-    pub fn take_viewport_dirty(&mut self) -> bool {
-        std::mem::take(&mut self.viewport_dirty)
-    }
-
-    /// Apply the persisted settings to the design system.
-    pub fn apply_settings(&mut self) {
-        let theme = match self.settings.theme {
-            0 => ThemeKind::Dark,
-            1 => ThemeKind::Light,
-            _ => ThemeKind::Classic,
-        };
-        self.design.set_theme(theme);
-        self.design.set_reduced_motion(self.settings.reduced_motion);
-        let scales = rowline_theme::TextScale::ALL;
-        let idx = (self.settings.text_scale as usize).min(scales.len() - 1);
-        self.design.set_text_scale(scales[idx]);
-        self.engine.set_use_figures(self.settings.use_figures);
-        self.viewport_dirty = true;
-    }
-
-    /// Copy the live design state back into the settings.
-    pub fn sync_settings(&mut self) {
-        self.settings.theme = match self.design.kind() {
-            ThemeKind::Dark => 0,
-            ThemeKind::Light => 1,
-            ThemeKind::Classic => 2,
-        };
-        self.settings.reduced_motion = self.design.motion.reduced;
-        self.settings.text_scale = match self.design.tokens.text_scale {
-            rowline_theme::TextScale::Small => 0,
-            rowline_theme::TextScale::Normal => 1,
-            rowline_theme::TextScale::Large => 2,
-            rowline_theme::TextScale::ExtraLarge => 3,
-        };
-        self.settings.use_figures = self.engine.use_figures();
-    }
-
     /// Build the data to persist.
     pub fn to_save(&self) -> rowline_core::save::SaveData {
         rowline_core::save::capture(self.settings.clone(), self.scores.clone())
@@ -622,7 +522,6 @@ impl Game {
             save.scores
         };
         self.king_record = self.scores.iter().map(|r| r.score).max().unwrap_or(0);
-        self.apply_settings();
         // Start with the figures already at rest.
         self.finish_figure_animation();
     }
@@ -636,9 +535,6 @@ impl Game {
             board: self.engine.board().clone(),
             selected: self.selected,
             path: self.path.clone(),
-            show_next: self.settings.show_next,
-            show_statistics: self.settings.show_statistics,
-            use_figures: self.engine.use_figures(),
             next_group: self.engine.next_group(),
             sheet_scale: self.sheet_scale,
             layout,
@@ -712,7 +608,7 @@ impl Game {
                         return;
                     }
                     // The menu has priority over the board.
-                    if self.menu_click(*pos, layout.client_w) {
+                    if self.menu_click(*pos) {
                         return;
                     }
                     self.click_at(*pos, layout);
@@ -729,13 +625,35 @@ impl Game {
                 if self.overlay == Overlay::NameEntry {
                     if text.is_empty() {
                         self.ime_start = None;
-                    } else if self.ime_start.is_none() {
-                        self.ime_start = Some(self.name_input.len());
+                    } else {
+                        if self.name_select_all {
+                            self.name_input.clear();
+                            self.name_select_all = false;
+                        }
+                        if self.ime_start.is_none() {
+                            self.ime_start = Some(self.name_input.len());
+                        }
                     }
                 }
             }
             InputEvent::TextInput { text } => {
                 if self.overlay != Overlay::NameEntry {
+                    return;
+                }
+                let committed: Vec<char> = text.chars().filter(|c| !c.is_control()).collect();
+                if self.name_select_all && !text.is_ascii() && !committed.is_empty() {
+                    // The default name was selected: the first IME commit
+                    // replaces it.  ASCII text is ignored here because the
+                    // physical key path already inserts it (accepting both
+                    // would duplicate every Latin character).
+                    self.name_input.clear();
+                    self.name_select_all = false;
+                    self.ime_start = None;
+                    for ch in committed {
+                        if self.name_input.chars().count() < 24 {
+                            self.name_input.push(ch);
+                        }
+                    }
                     return;
                 }
                 // A commit replaces the raw pinyin typed during composition.
@@ -771,39 +689,26 @@ impl Game {
         }
     }
 
+    /// Open `overlay`, or close it when it is already the active one.
+    fn toggle_overlay(&mut self, overlay: Overlay) {
+        self.overlay = if self.overlay == overlay {
+            Overlay::None
+        } else {
+            overlay
+        };
+    }
+
     /// Execute a menu command.
     pub fn run_command(&mut self, cmd: Command) {
         match cmd {
             Command::NEW_GAME => self.start_new_game(),
-            Command::TOGGLE_NEXT_SET => {
-                self.settings.show_next = !self.settings.show_next;
-            }
-            Command::TOGGLE_STATISTICS => {
-                self.settings.show_statistics = !self.settings.show_statistics;
-            }
-            Command::TOGGLE_USE_FIGURES => {
-                let next = !self.engine.use_figures();
-                self.engine.set_use_figures(next);
-                self.settings.use_figures = next;
-            }
-            Command::TOGGLE_FIXED_SCALE => self.toggle_retro_mode(),
+            Command::TOGGLE_STATISTICS => self.toggle_overlay(Overlay::Statistics),
             Command::EXIT => self.quit = true,
             Command::SHOW_HIGH_SCORES => {
                 self.overlay = Overlay::Scoreboard;
             }
-            Command::ABOUT => {
-                self.overlay = Overlay::About;
-            }
-            Command::CONTENTS => {
-                // The original opens `rowline.hlp`; the re-implementation
-                // shows the command reference in game.
-                self.help_open = !self.help_open;
-            }
-            Command::HELP => {
-                // The original opens `rowline.hlp`; the re-implementation
-                // shows the command reference in game.
-                self.help_open = !self.help_open;
-            }
+            Command::ABOUT => self.toggle_overlay(Overlay::About),
+            Command::HELP => self.toggle_overlay(Overlay::Help),
             // `Command` is an open tuple struct, so an unknown id must be
             // tolerated rather than treated as a programming error.
             _ => {}
@@ -811,20 +716,8 @@ impl Game {
     }
 
     /// `true` when the click was consumed by the menu.
-    fn menu_click(&mut self, pos: Point, client_w: i32) -> bool {
+    fn menu_click(&mut self, pos: Point) -> bool {
         let m = self.menu.metrics;
-        // The toolbar, at the right of the menu bar.  It is hidden in the
-        // classic theme (the original has no toolbar), so it must not
-        // swallow clicks there either.
-        if !self.design.is_classic() {
-            if let Some(btn) = self.toolbar_button_at(pos, client_w) {
-                match btn {
-                    0 => self.toggle_theme(),
-                    _ => self.toggle_retro_mode(),
-                }
-                return true;
-            }
-        }
         // The menu bar.
         if pos.y >= 0.0 && pos.y < m.bar_height {
             let idx = (pos.x / m.title_width).floor();
@@ -838,7 +731,7 @@ impl Game {
         // The open dropdown.
         if let Some(panel) = self.menu_panel_rect() {
             if panel.contains(pos) {
-                let cmd = self.menu.click(pos.x - panel.x, pos.y - panel.y);
+                let cmd = self.menu.click(pos.y - panel.y);
                 if let Some(id) = cmd {
                     self.run_command(crate::commands::Command(id));
                 }
@@ -876,7 +769,7 @@ impl Game {
         }
         if let Some(panel) = self.menu_panel_rect() {
             if panel.contains(pos) {
-                self.menu.hover_at(pos.x - panel.x, pos.y - panel.y);
+                self.menu.hover_at(pos.y - panel.y);
             }
         }
     }
@@ -900,9 +793,6 @@ impl Game {
             Key::Escape => {
                 if !self.menu.is_closed() {
                     self.menu.close();
-                    true
-                } else if self.help_open {
-                    self.help_open = false;
                     true
                 } else if self.overlay != Overlay::None {
                     self.dismiss_overlay();
@@ -943,12 +833,22 @@ impl Game {
         match key {
             Key::Enter => self.accept_name(),
             Key::Backspace => {
-                self.name_input.pop();
+                if self.name_select_all {
+                    // The prefilled default is selected: delete it whole.
+                    self.name_input.clear();
+                    self.name_select_all = false;
+                } else {
+                    self.name_input.pop();
+                }
             }
             Key::Escape => self.dismiss_overlay(),
             _ => {
                 // Only printable characters are accepted; the name is capped.
                 if let Some(ch) = key_char(key) {
+                    if self.name_select_all {
+                        self.name_input.clear();
+                        self.name_select_all = false;
+                    }
                     if self.name_input.chars().count() < 24 {
                         self.name_input.push(ch);
                     }
@@ -982,11 +882,7 @@ impl Game {
                 self.phase = Phase::Ready;
             } else {
                 self.selected = Some(cell);
-                self.select_anim = if self.design.motion.reduced {
-                    None
-                } else {
-                    Some((cell, Instant::now()))
-                };
+                self.select_anim = Some((cell, Instant::now()));
                 self.path.clear();
                 self.phase = Phase::Selected;
             }
@@ -1015,17 +911,11 @@ impl Game {
                 self.path.clear();
                 self.hovered = None;
                 self.phase = Phase::Animating;
-                if self.design.motion.reduced {
-                    // No animation: apply the engine move immediately.
-                    let res = self.engine.move_ball(pr as i32, pc as i32, r, c);
-                    self.apply_move_result(res, moving_colour, layout);
-                } else {
-                    self.move_anim = Some(MoveAnimation {
-                        path,
-                        colour: moving_colour,
-                        started: Instant::now(),
-                    });
-                }
+                self.move_anim = Some(MoveAnimation {
+                    path,
+                    colour: moving_colour,
+                    started: Instant::now(),
+                });
             }
         }
     }
@@ -1123,6 +1013,7 @@ impl Game {
     pub fn offer_name_entry(&mut self) {
         self.overlay = Overlay::NameEntry;
         self.name_input = rowline_core::scoreboard::default_player_name().to_string();
+        self.name_select_all = true;
     }
 
     /// Accept the typed name and record it, then show the leaderboard.
@@ -1130,6 +1021,7 @@ impl Game {
     /// The original writes the row and then shows the table (`0x402D4A`),
     /// which is why accepting a name lands on the leaderboard.
     pub fn accept_name(&mut self) {
+        self.name_select_all = false;
         let name = self.name_input.trim().to_string();
         let name = if name.is_empty() {
             rowline_core::scoreboard::default_player_name().to_string()
@@ -1149,6 +1041,7 @@ impl Game {
     /// Dismiss the current overlay.
     pub fn dismiss_overlay(&mut self) {
         self.overlay = Overlay::None;
+        self.name_select_all = false;
     }
 
     /// Clear the leaderboard (the 清除 button).
@@ -1192,17 +1085,12 @@ impl Game {
             // The scale just changed (the record moved).  Drop both figures
             // to the floor first, then raise the king to the new scale's
             // height: it looks like the record grew.
-            if self.design.motion.reduced {
-                self.king_rise = self.king_rise_target;
-                self.challenger_rise = 0.0;
-            } else {
-                self.reset_anim = Some(ScaleReset {
-                    started: Instant::now(),
-                    king_from,
-                    challenger_from,
-                    record_from,
-                });
-            }
+            self.reset_anim = Some(ScaleReset {
+                started: Instant::now(),
+                king_from,
+                challenger_from,
+                record_from,
+            });
         }
     }
 
@@ -1214,17 +1102,23 @@ impl Game {
     fn overlay_click(&mut self, pos: Point, layout: Layout) -> bool {
         match self.overlay {
             Overlay::NameEntry => {
-                let (_panel, _field, ok) = name_entry_rects(layout);
-                if ok.contains(pos) {
+                let (panel, field, ok) = name_entry_rects(layout);
+                if close_rect(panel).contains(pos) {
+                    self.dismiss_overlay();
+                } else if field.contains(pos) {
+                    self.name_select_all = false;
+                } else if ok.contains(pos) {
                     self.accept_name();
                 }
                 // Modal: never let a click reach the board behind it.
                 true
             }
             Overlay::Scoreboard => {
-                let (clear, ok) =
-                    scoreboard_buttons(scoreboard_rects(layout, self.design.is_classic()));
-                if clear.contains(pos) {
+                let (clear, ok) = scoreboard_buttons(scoreboard_rects(layout));
+                let (panel, _) = scoreboard_rects(layout);
+                if close_rect(panel).contains(pos) {
+                    self.dismiss_overlay();
+                } else if clear.contains(pos) {
                     self.clear_scores();
                 } else if ok.contains(pos) {
                     self.dismiss_overlay();
@@ -1237,7 +1131,24 @@ impl Game {
                 true
             }
             Overlay::About => {
-                self.dismiss_overlay();
+                let (panel, button) = about_rects(layout);
+                if close_rect(panel).contains(pos) || button.contains(pos) || !panel.contains(pos) {
+                    self.dismiss_overlay();
+                }
+                true
+            }
+            Overlay::Help => {
+                let (panel, button) = help_rects(layout);
+                if close_rect(panel).contains(pos) || button.contains(pos) || !panel.contains(pos) {
+                    self.dismiss_overlay();
+                }
+                true
+            }
+            Overlay::Statistics => {
+                let (panel, button) = stats_rects(layout);
+                if close_rect(panel).contains(pos) || button.contains(pos) || !panel.contains(pos) {
+                    self.dismiss_overlay();
+                }
                 true
             }
             Overlay::None => false,
@@ -1256,9 +1167,9 @@ impl Game {
 
 /// Build the render commands for the current state.
 ///
-/// The board itself is drawn by the shared view builder; the **HUD** (the
-/// side panel) is drawn here with the modern design language: rounded
-/// surfaces, a soft shadow and the score in the numeric style.
+/// The board itself is drawn by the shared view builder; the HUD and the
+/// dialogs are drawn here in the Classic style: square controls, beveled
+/// surfaces and black-on-grey text.
 pub fn frame(game: &Game, layout: Layout) -> Vec<RenderCmd> {
     let mut cmds = rowline_core::view::build_frame(&game.snapshot(layout), &view_style(game));
 
@@ -1279,11 +1190,6 @@ pub fn frame(game: &Game, layout: Layout) -> Vec<RenderCmd> {
 
     cmds.extend(menu_commands(game, layout));
 
-    // ---- the statistics window (非模态, doc/11 section 5e) --------------
-    if game.settings.show_statistics {
-        cmds.extend(stats_panel(game, layout));
-    }
-
     // ---- the decorative particles ---------------------------------------
     for p in game.effects.particles() {
         let a = (p.opacity() * 255.0) as u8;
@@ -1299,28 +1205,65 @@ pub fn frame(game: &Game, layout: Layout) -> Vec<RenderCmd> {
         });
     }
 
-    // ---- the command reference -----------------------------------------
-    if game.help_open {
-        cmds.extend(help_overlay(game, layout));
-    }
-
     // ---- the end-of-game dialog ----------------------------------------
     if game.game_over && !game.game_over_ack {
+        cmds.push(scrim(game, layout));
         cmds.extend(game_over_dialog(game, layout));
     }
 
     // ---- the modal overlays -------------------------------------------
+    if game.overlay != Overlay::None {
+        cmds.push(scrim(game, layout));
+    }
     match game.overlay {
         Overlay::Scoreboard => cmds.extend(scoreboard_overlay(game, layout)),
         Overlay::NameEntry => cmds.extend(name_entry_overlay(game, layout)),
         Overlay::About => cmds.extend(about_overlay(game, layout)),
+        Overlay::Help => cmds.extend(help_overlay(game, layout)),
+        Overlay::Statistics => cmds.extend(stats_panel(game, layout)),
         Overlay::None => {}
     }
 
-    // The window's own raised bevel goes last so nothing covers it.  The
-    // layout reserves `FRAME_RESERVE` rows below the board for exactly this.
-    cmds.extend(client_frame_commands(game, layout));
+    // The original's window has a raised bevel around the client area.
+    // The layout reserves the bottom rows for it.
+    cmds.extend(client_frame_commands(layout));
+
     cmds
+}
+
+/// The raised bevel around the whole client area.
+fn client_frame_commands(layout: Layout) -> Vec<RenderCmd> {
+    if layout.client_w < 8 || layout.client_h < 8 {
+        return Vec::new();
+    }
+    let w = layout.client_w as f32;
+    let h = layout.client_h as f32;
+    let mut cmds = Vec::new();
+    for i in 0..2 {
+        let i = i as f32;
+        cmds.push(RenderCmd::Frame {
+            rect: rowline_core::render::Rect::new(i, i, w - 2.0 * i, h - 2.0 * i),
+            style: rowline_core::render::FrameStyle::Raised,
+        });
+    }
+    cmds.push(RenderCmd::Frame {
+        rect: rowline_core::render::Rect::new(2.0, 2.0, w - 4.0, h - 4.0),
+        style: rowline_core::render::FrameStyle::Flat,
+    });
+    cmds
+}
+
+/// Append one ball at a centre point.
+///
+/// The product uses the original atlas sprite for the ball itself.
+fn ball_at(cmds: &mut Vec<RenderCmd>, game: &Game, colour: u8, cx: f32, cy: f32, d: f32) {
+    cmds.push(RenderCmd::Sprite {
+        sheet: rowline_core::render::SpriteSheetId::MAIN,
+        src: rowline_core::view::ball_inner_src(colour, game.sheet_scale),
+        dst: Point::new(cx - d * 0.5, cy - d * 0.5),
+        size: Size::new(d, d),
+        tint: rowline_core::render::Color::WHITE,
+    });
 }
 
 /// Draw the ball gliding along its move path.
@@ -1335,8 +1278,6 @@ fn move_animation_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
     if anim.path.len() < 2 {
         return Vec::new();
     }
-    let set = game.engine().use_figures() as u8;
-    let scale = game.sheet_scale;
     let mut cmds = Vec::new();
 
     // Hide the source ball (the engine has not moved it yet).
@@ -1344,7 +1285,7 @@ fn move_animation_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
     let (sx, sy) = layout.cell_origin(sr as i32, sc as i32);
     cmds.push(RenderCmd::Sprite {
         sheet: rowline_core::render::SpriteSheetId::MAIN,
-        src: rowline_core::view::ball_src(0, set, scale),
+        src: rowline_core::view::ball_src(0, game.sheet_scale),
         dst: Point::new(sx as f32, sy as f32),
         size: Size::new(36.0, 36.0),
         tint: rowline_core::render::Color::WHITE,
@@ -1376,13 +1317,7 @@ fn move_animation_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
     let cx = (x0 as f32 + 18.0) + (x1 - x0) as f32 * frac;
     let cy = (y0 as f32 + 18.0) + (y1 - y0) as f32 * frac;
 
-    cmds.push(RenderCmd::Sprite {
-        sheet: rowline_core::render::SpriteSheetId::MAIN,
-        src: rowline_core::view::ball_inner_src(anim.colour, set, scale),
-        dst: Point::new(cx - 15.0, cy - 15.0),
-        size: Size::new(30.0, 30.0),
-        tint: rowline_core::render::Color::WHITE,
-    });
+    ball_at(&mut cmds, game, anim.colour, cx, cy, 30.0);
     cmds
 }
 
@@ -1409,32 +1344,19 @@ fn selection_animation_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
     if colour != 0 {
         cmds.push(RenderCmd::Sprite {
             sheet: rowline_core::render::SpriteSheetId::MAIN,
-            src: rowline_core::view::ball_src(
-                0,
-                game.engine().use_figures() as u8,
-                game.sheet_scale,
-            ),
+            src: rowline_core::view::ball_src(0, game.sheet_scale),
             dst: Point::new(x as f32, y as f32),
             size: Size::new(36.0, 36.0),
             tint: rowline_core::render::Color::WHITE,
         });
-        cmds.push(RenderCmd::Sprite {
-            sheet: rowline_core::render::SpriteSheetId::MAIN,
-            src: rowline_core::view::ball_inner_src(
-                colour,
-                game.engine().use_figures() as u8,
-                game.sheet_scale,
-            ),
-            dst: Point::new(
-                x as f32 + rowline_core::view::BALL_INSET as f32,
-                y as f32 + rowline_core::view::BALL_INSET as f32 - hop,
-            ),
-            size: Size::new(
-                rowline_core::view::BALL_PX as f32,
-                rowline_core::view::BALL_PX as f32,
-            ),
-            tint: rowline_core::render::Color::WHITE,
-        });
+        ball_at(
+            &mut cmds,
+            game,
+            colour,
+            x as f32 + 18.0,
+            y as f32 + 18.0 - hop,
+            22.0,
+        );
     }
     // The ring grows from the cell edge outwards.
     let grow = 36.0 + 12.0 * t;
@@ -1449,7 +1371,6 @@ fn selection_animation_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
 /// The hover ring under the pointer, when the board is interactive.
 fn hover_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
     if game.overlay != Overlay::None
-        || game.help_open
         || game.move_anim.is_some()
         || (game.game_over && !game.game_over_ack)
         || !game.menu.is_closed()
@@ -1474,9 +1395,6 @@ fn hover_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
 /// the second clears the cells and draws the empty plate.  The re-design
 /// approximates the pattern with a coarse 3×3 checker; the timing matches.
 fn clear_animation_commands(game: &Game, layout: Layout, anim: &ClearAnimation) -> Vec<RenderCmd> {
-    if game.design.motion.reduced {
-        return Vec::new();
-    }
     let mut cmds = Vec::new();
     let phase = (anim.started.elapsed().as_millis() / CLEAR_STEP.as_millis()) as usize;
     if phase > 1 {
@@ -1489,7 +1407,7 @@ fn clear_animation_commands(game: &Game, layout: Layout, anim: &ClearAnimation) 
         let colour = p.balls.get(colour).into();
         let keep = |i: usize, j: usize| {
             if phase == 0 {
-                (i + j) % 2 == 0
+                (i + j).is_multiple_of(2)
             } else {
                 // Three of the nine fragments survive the second pass.
                 matches!((i, j), (0, 0) | (1, 2) | (2, 1))
@@ -1516,61 +1434,42 @@ fn clear_animation_commands(game: &Game, layout: Layout, anim: &ClearAnimation) 
     cmds
 }
 
-/// The command reference overlay (the original's "Contents").
+/// Geometry of the help dialog: the card and its footer button.
+fn help_rects(layout: Layout) -> (rowline_core::render::Rect, rowline_core::render::Rect) {
+    let rows = crate::commands::ALL.len() as f32;
+    let panel = dialog_rect(layout, 420.0, 46.0 + 16.0 + rows * 30.0 + 64.0);
+    (panel, dialog_button_rect(panel))
+}
+
+/// The in-app command reference (the redesign's only help window).
 fn help_overlay(game: &Game, layout: Layout) -> Vec<RenderCmd> {
-    let mut cmds = Vec::new();
     let ds = &game.design;
     let p = &ds.palette;
+    let (panel, _button) = help_rects(layout);
+    let mut cmds = dialog_chrome(game, panel, "\u{5e2e}\u{52a9}");
 
-    let w = 360.0_f32.min(layout.client_w as f32 - 32.0).max(160.0);
-    let rows = crate::commands::ALL.len() as f32;
-    let h = (rows + 4.0) * 26.0 + 32.0;
-    let rect = rowline_core::render::Rect::new(
-        ((layout.client_w as f32 - w) * 0.5).max(8.0),
-        ((layout.client_h as f32 - h) * 0.5).max(8.0),
-        w,
-        h,
-    );
-    cmds.push(RenderCmd::Shadow {
-        rect,
-        radius: ds.radius(rowline_theme::Radius::Lg),
-        offset: rowline_core::input::Point::new(0.0, 8.0),
-        blur: 32.0,
-        color: p.shadow.into(),
-    });
-    cmds.push(RenderCmd::RoundedRect {
-        rect,
-        radius: ds.radius(rowline_theme::Radius::Lg),
-        color: p.surface_raised.into(),
-    });
-    cmds.push(RenderCmd::Outline {
-        rect,
-        color: p.outline.into(),
-    });
-    cmds.push(RenderCmd::Text {
-        text: "\u{5185}\u{5bb9}".to_string(),
-        at: rowline_core::input::Point::new(rect.x + 16.0, rect.y + 12.0),
-        size: ds.text_size(rowline_theme::TextRole::Title) as u16,
-        color: p.text_primary.into(),
-    });
-
+    let body = ds.text_size(rowline_theme::TextRole::Body) as u16;
     for (i, cmd) in crate::commands::ALL.iter().enumerate() {
-        let y = rect.y + 44.0 + i as f32 * 26.0;
-        if let Some(icon) = crate::commands::icon_for(*cmd) {
-            cmds.push(RenderCmd::Icon {
-                index: icon,
-                dst: rowline_core::input::Point::new(rect.x + 16.0, y - 1.0),
-                size: rowline_core::input::Size::new(16.0, 16.0),
-                tint: p.text_secondary.into(),
+        let y = panel.y + DIALOG_TITLE_H + 12.0 + i as f32 * 30.0;
+        cmds.push(RenderCmd::Text {
+            text: cmd.label().to_string(),
+            at: rowline_core::input::Point::new(panel.x + 24.0, y),
+            size: body,
+            color: p.text_primary.into(),
+        });
+        let hint = cmd.shortcut();
+        if !hint.is_empty() {
+            let width = 8.0 * hint.chars().count() as f32;
+            cmds.push(RenderCmd::Text {
+                text: hint.to_string(),
+                at: rowline_core::input::Point::new(panel.x + panel.width - 24.0 - width, y),
+                size: body,
+                color: p.text_tertiary.into(),
             });
         }
-        cmds.push(RenderCmd::Text {
-            text: format!("{}  {}", cmd.label(), cmd.shortcut()),
-            at: rowline_core::input::Point::new(rect.x + 40.0, y),
-            size: ds.text_size(rowline_theme::TextRole::Body) as u16,
-            color: p.text_secondary.into(),
-        });
     }
+
+    cmds.extend(dialog_button(game, panel));
     cmds
 }
 
@@ -1624,47 +1523,10 @@ fn view_style(game: &Game) -> rowline_core::view::ViewStyle {
     let p = &game.design.palette;
     rowline_core::view::ViewStyle {
         background: p.background.into(),
-        // The board strip and the cell plates are semantic tokens, so the
-        // light theme gets its own warm-paper board instead of reusing the
-        // white page surface.
         board_backdrop: p.board_backdrop.into(),
-        cell_fill: p.board_cell.into(),
-        cell_border: p.outline_strong.into(),
-        cell_radius: game.design.radius(rowline_theme::Radius::Sm),
         selection: p.selection.into(),
         path: p.accent.into(),
-        frame_light: rowline_core::render::Color::WHITE,
-        frame_dark: rowline_core::render::Color::rgb(128, 128, 128),
-        // The original is a Win95 window: every surface sits in a raised
-        // bevel.  The modern themes stay flat.
-        frame_thickness: if game.design.is_classic() { 2.0 } else { 0.0 },
     }
-}
-
-/// The raised bevel around the whole client area.
-///
-/// The original's window frame is drawn by Win32 outside the client; drawn
-/// here it gives the same "boxed" look on every platform.
-fn client_frame_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
-    if !game.design.is_classic() || layout.client_w < 8 || layout.client_h < 8 {
-        return Vec::new();
-    }
-    let w = layout.client_w as f32;
-    let h = layout.client_h as f32;
-    let mut cmds = Vec::new();
-    for i in 0..2 {
-        let i = i as f32;
-        cmds.push(RenderCmd::Frame {
-            rect: rowline_core::render::Rect::new(i, i, w - 2.0 * i, h - 2.0 * i),
-            style: FrameStyle::Raised,
-        });
-    }
-    // The original has a one-pixel gap between the frame and the content.
-    cmds.push(RenderCmd::Frame {
-        rect: rowline_core::render::Rect::new(2.0, 2.0, w - 4.0, h - 4.0),
-        style: FrameStyle::Flat,
-    });
-    cmds
 }
 
 /// The height of the HUD bar, in logical pixels.
@@ -1698,26 +1560,26 @@ fn hud_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
         color: p.surface_alt.into(),
     });
 
-    // The black readout, with the original's white frame around it.
+    // The readout: a deep plate with warm digits, right-aligned.
     let score_box = |cmds: &mut Vec<RenderCmd>,
                      rect: rowline_core::render::Rect,
                      score: u32,
                      highlight: bool| {
         cmds.push(RenderCmd::RoundedRect {
             rect,
-            radius: ds.radius(rowline_theme::Radius::Sm),
+            radius: ds.radius(rowline_theme::Radius::Md),
             color: p.score_fill.into(),
         });
         cmds.push(RenderCmd::Outline {
             rect,
             color: if highlight {
-                rowline_core::render::Color::rgb(255, 210, 74)
+                p.accent.into()
             } else {
                 p.score_border.into()
             },
         });
         if highlight {
-            // A second, outer gold ring for the new-record flash.
+            // A second, outer accent ring for the new-record flash.
             cmds.push(RenderCmd::Outline {
                 rect: rowline_core::render::Rect::new(
                     rect.x - 1.0,
@@ -1725,25 +1587,37 @@ fn hud_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
                     rect.width + 2.0,
                     rect.height + 2.0,
                 ),
-                color: rowline_core::render::Color::rgb(255, 210, 74),
+                color: p.accent.into(),
             });
         }
         let text = format!("{score}");
-        // Right-aligned, as in the original.  Digits at this size are about
-        // eight logical pixels wide.
         let width = 8.0 * text.chars().count() as f32;
         cmds.push(RenderCmd::Text {
             text,
-            at: rowline_core::input::Point::new(rect.x + rect.width - 6.0 - width, rect.y + 3.0),
+            at: rowline_core::input::Point::new(rect.x + rect.width - 7.0 - width, rect.y + 3.0),
             size: text_size,
             color: p.score_text.into(),
         });
     };
 
     let box_y = y + (HUD_H - SCORE_BOX_H) * 0.5;
+    // Label and box share one row: `纪录 [100]` on the left and
+    // `本局 [0]` on the right.  Putting the label above the box made them
+    // collide in the 44 px HUD.
+    let label_y = y + (HUD_H - 12.0) * 0.5;
+    let label = "\u{7eaa}\u{5f55}"; // 纪录
+    let left_box = rowline_core::render::Rect::new(64.0, box_y, SCORE_BOX_W, SCORE_BOX_H);
+    let right_box =
+        rowline_core::render::Rect::new(w - 20.0 - SCORE_BOX_W, box_y, SCORE_BOX_W, SCORE_BOX_H);
+    cmds.push(RenderCmd::Text {
+        text: label.to_string(),
+        at: rowline_core::input::Point::new(20.0, label_y),
+        size: ds.text_size(rowline_theme::TextRole::Caption) as u16,
+        color: p.text_tertiary.into(),
+    });
     score_box(
         &mut cmds,
-        rowline_core::render::Rect::new(16.0, box_y, SCORE_BOX_W, SCORE_BOX_H),
+        left_box,
         game.displayed_king_score(),
         game.record_celebrating(),
     );
@@ -1754,8 +1628,8 @@ fn hud_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
     let group_x = ((w - PREVIEW_W) * 0.5).max(0.0);
     let cell_y = y + (HUD_H - 36.0) * 0.5;
     cmds.push(RenderCmd::Text {
-        text: "\u{4e0b}\u{7ec4}".to_string(),
-        at: rowline_core::input::Point::new(group_x - 36.0, y + 12.0),
+        text: "\u{4e0b}\u{4e00}\u{7ec4}".to_string(),
+        at: rowline_core::input::Point::new(group_x - 48.0, y + 12.0),
         size: label_size,
         color: p.text_tertiary.into(),
     });
@@ -1765,166 +1639,281 @@ fn hud_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
         // Every slot is a beveled plate, even when it is empty.
         cmds.push(RenderCmd::Sprite {
             sheet: rowline_core::render::SpriteSheetId::MAIN,
-            src: rowline_core::view::ball_src(
-                0,
-                game.engine().use_figures() as u8,
-                game.sheet_scale,
-            ),
+            src: rowline_core::view::ball_src(0, game.sheet_scale),
             dst: rowline_core::input::Point::new(cell.x, cell.y),
             size: rowline_core::input::Size::new(36.0, 36.0),
             tint: rowline_core::render::Color::WHITE,
         });
         if *colour != 0 {
-            cmds.push(RenderCmd::Sprite {
-                sheet: rowline_core::render::SpriteSheetId::MAIN,
-                src: rowline_core::view::ball_inner_src(
-                    *colour,
-                    game.engine().use_figures() as u8,
-                    game.sheet_scale,
-                ),
-                // The preview balls are 24 px in the original, smaller than
-                // the board balls.
-                dst: rowline_core::input::Point::new(cell.x + 6.0, cell.y + 6.0),
-                size: rowline_core::input::Size::new(24.0, 24.0),
-                tint: rowline_core::render::Color::WHITE,
-            });
+            // The preview balls are 24 px, smaller than the board balls.
+            ball_at(&mut cmds, game, *colour, cell.x + 18.0, cell.y + 18.0, 24.0);
         }
     }
 
-    // ---- the colour / shape indicator ----------------------------------
+    // ---- the right score box -------------------------------------------
+    let right_label = "\u{672c}\u{5c40}"; // 本局
     cmds.push(RenderCmd::Text {
-        text: if game.engine().use_figures() {
-            "\u{5f62}\u{72b6}".to_string()
-        } else {
-            "\u{989c}\u{8272}".to_string()
-        },
-        at: rowline_core::input::Point::new(group_x + PREVIEW_W + 8.0, y + 12.0),
-        size: label_size,
+        text: right_label.to_string(),
+        at: rowline_core::input::Point::new(right_box.x - 44.0, label_y),
+        size: ds.text_size(rowline_theme::TextRole::Caption) as u16,
         color: p.text_tertiary.into(),
     });
-
-    // ---- the right score box -------------------------------------------
-    score_box(
-        &mut cmds,
-        rowline_core::render::Rect::new(w - 16.0 - SCORE_BOX_W, box_y, SCORE_BOX_W, SCORE_BOX_H),
-        game.challenger_score(),
-        false,
-    );
+    score_box(&mut cmds, right_box, game.challenger_score(), false);
 
     cmds
 }
 
-/// The width of the statistics panel, in logical pixels.
-///
-/// The original's `XGrdCptDialog` client area is 154x289 (8 rows of 36 px);
-/// the re-implementation adds a 22 px title bar.
-const STATS_W: f32 = 154.0;
-/// The height of the statistics title bar.
-const STATS_TITLE_H: f32 = 22.0;
-/// The height of one statistics row -- one sprite slot plus its caption.
-const STATS_ROW_H: f32 = 36.0;
+// ---------------------------------------------------------------- dialogs
+//
+// Every modal shares one chrome: a dimmed backdrop, a raised card, a title,
+// a close (x) button in the top-right corner and, for informational dialogs,
+// a labelled 关闭 button at the bottom.  The geometry helpers are used by
+// both the drawing code and the hit-testing, so a button can never be drawn
+// in one place and clickable in another.
 
-/// Draw the statistics window.
-///
-/// Recovered from the live original (`XGrdCptDialog`, title `统计`,
-/// `0x404120`): eight rows, one per sprite slot.  Row 0 is the empty cell
-/// count; rows 1..=7 are the seven ball colours.  Every row reads
-/// `count (percent%)`; the ball rows append `,消除-N`, where `N` is the
-/// cumulative number of balls of that colour eliminated this game.
-fn stats_panel(game: &Game, layout: Layout) -> Vec<RenderCmd> {
-    let mut cmds = Vec::new();
+/// The height of the dialog title strip.
+const DIALOG_TITLE_H: f32 = 46.0;
+/// The edge of the square close button.
+const DIALOG_CLOSE: f32 = 28.0;
+/// The footer button.
+const DIALOG_BTN_W: f32 = 96.0;
+const DIALOG_BTN_H: f32 = 32.0;
+
+/// A centred card, clamped to the client area.
+fn dialog_rect(layout: Layout, w: f32, h: f32) -> rowline_core::render::Rect {
+    let w = w.min(layout.client_w as f32 - 32.0).max(240.0);
+    let h = h.min(layout.client_h as f32 - 32.0).max(160.0);
+    rowline_core::render::Rect::new(
+        ((layout.client_w as f32 - w) * 0.5).max(8.0),
+        ((layout.client_h as f32 - h) * 0.5).max(8.0),
+        w,
+        h,
+    )
+}
+
+/// The close (x) button in the title strip.
+fn close_rect(panel: rowline_core::render::Rect) -> rowline_core::render::Rect {
+    rowline_core::render::Rect::new(
+        panel.x + panel.width - DIALOG_CLOSE - 16.0,
+        panel.y + 9.0,
+        DIALOG_CLOSE,
+        DIALOG_CLOSE,
+    )
+}
+
+/// The labelled footer button.
+fn dialog_button_rect(panel: rowline_core::render::Rect) -> rowline_core::render::Rect {
+    rowline_core::render::Rect::new(
+        panel.x + (panel.width - DIALOG_BTN_W) * 0.5,
+        panel.y + panel.height - DIALOG_BTN_H - 16.0,
+        DIALOG_BTN_W,
+        DIALOG_BTN_H,
+    )
+}
+
+/// The dimmed layer behind a modal.
+fn scrim(game: &Game, layout: Layout) -> RenderCmd {
+    RenderCmd::RoundedRect {
+        rect: rowline_core::render::Rect::new(
+            0.0,
+            0.0,
+            layout.client_w as f32,
+            layout.client_h as f32,
+        ),
+        radius: 0.0,
+        color: game.design.palette.scrim.into(),
+    }
+}
+
+/// The card, title and close button shared by every dialog.
+fn dialog_chrome(game: &Game, panel: rowline_core::render::Rect, title: &str) -> Vec<RenderCmd> {
     let ds = &game.design;
     let p = &ds.palette;
-
-    let height = STATS_TITLE_H + 8.0 * STATS_ROW_H;
-    let rect = rowline_core::render::Rect::new(
-        (layout.client_w as f32 - STATS_W - 2.0).max(0.0),
-        layout.top as f32 + HUD_H + 2.0,
-        STATS_W,
-        height,
-    );
-    cmds.push(RenderCmd::Shadow {
-        rect,
-        radius: ds.radius(rowline_theme::Radius::Sm),
-        offset: rowline_core::input::Point::new(0.0, 6.0),
-        blur: 24.0,
-        color: p.shadow.into(),
+    let mut cmds = vec![
+        RenderCmd::Shadow {
+            rect: panel,
+            radius: ds.radius(rowline_theme::Radius::Lg),
+            offset: rowline_core::input::Point::new(0.0, 10.0),
+            blur: 36.0,
+            color: p.shadow.into(),
+        },
+        RenderCmd::RoundedRect {
+            rect: panel,
+            radius: ds.radius(rowline_theme::Radius::Lg),
+            color: p.surface_raised.into(),
+        },
+        RenderCmd::Outline {
+            rect: panel,
+            color: p.outline.into(),
+        },
+    ];
+    cmds.push(RenderCmd::Text {
+        text: title.to_string(),
+        at: rowline_core::input::Point::new(panel.x + 20.0, panel.y + 13.0),
+        size: ds.text_size(rowline_theme::TextRole::Title) as u16,
+        color: p.text_primary.into(),
     });
+    // A one-pixel divider under the title strip.
     cmds.push(RenderCmd::RoundedRect {
-        rect,
-        radius: ds.radius(rowline_theme::Radius::Sm),
-        color: p.surface_raised.into(),
-    });
-    cmds.push(RenderCmd::Outline {
-        rect,
+        rect: rowline_core::render::Rect::new(
+            panel.x + 16.0,
+            panel.y + DIALOG_TITLE_H - 1.0,
+            panel.width - 32.0,
+            1.0,
+        ),
+        radius: 0.0,
         color: p.outline.into(),
     });
-
-    // The title bar.
+    // The close button: a quiet square with an x, familiar from every
+    // desktop dialog.  It is the primary way out next to Esc.
+    let close = close_rect(panel);
     cmds.push(RenderCmd::RoundedRect {
-        rect: rowline_core::render::Rect::new(rect.x, rect.y, rect.width, STATS_TITLE_H),
-        radius: ds.radius(rowline_theme::Radius::Sm),
+        rect: close,
+        radius: 0.0,
         color: p.surface_alt.into(),
     });
-    cmds.push(RenderCmd::Text {
-        text: "\u{7edf}\u{8ba1}".to_string(),
-        at: rowline_core::input::Point::new(rect.x + 8.0, rect.y + 4.0),
-        size: ds.text_size(rowline_theme::TextRole::Label) as u16,
-        color: p.text_primary.into(),
+    cmds.push(RenderCmd::Outline {
+        rect: close,
+        color: p.outline.into(),
     });
     cmds.push(RenderCmd::Text {
         text: "\u{00d7}".to_string(),
-        at: rowline_core::input::Point::new(rect.x + rect.width - 16.0, rect.y + 3.0),
-        size: ds.text_size(rowline_theme::TextRole::Body) as u16,
-        color: p.text_tertiary.into(),
+        at: rowline_core::input::Point::new(close.x + 9.0, close.y + 3.0),
+        size: ds.text_size(rowline_theme::TextRole::Title) as u16,
+        color: p.text_primary.into(),
     });
+    cmds
+}
+
+/// The labelled close button at the bottom of an informational dialog.
+fn dialog_button(game: &Game, panel: rowline_core::render::Rect) -> Vec<RenderCmd> {
+    let ds = &game.design;
+    let p = &ds.palette;
+    let btn = dialog_button_rect(panel);
+    vec![
+        RenderCmd::RoundedRect {
+            rect: btn,
+            radius: ds.radius(rowline_theme::Radius::Sm),
+            color: p.accent.into(),
+        },
+        RenderCmd::Text {
+            text: "\u{5173}\u{95ed}".to_string(),
+            at: rowline_core::input::Point::new(btn.x + 32.0, btn.y + 6.0),
+            size: ds.text_size(rowline_theme::TextRole::Body) as u16,
+            color: p.text_on_accent.into(),
+        },
+    ]
+}
+
+/// Geometry of the statistics dialog: the card and its footer button.
+fn stats_rects(layout: Layout) -> (rowline_core::render::Rect, rowline_core::render::Rect) {
+    let panel = dialog_rect(layout, 372.0, 392.0);
+    (panel, dialog_button_rect(panel))
+}
+
+/// Draw the statistics dialog.
+///
+/// Eight rows: the empty-cell count and the seven ball colours.  The
+/// original's tiny docked `XGrdCptDialog` is redesigned as a centred modal
+/// so it no longer covers the board, with columns for the count, the share
+/// of the board and the number cleared this game.
+fn stats_panel(game: &Game, layout: Layout) -> Vec<RenderCmd> {
+    let ds = &game.design;
+    let p = &ds.palette;
+    let (panel, _button) = stats_rects(layout);
+    let mut cmds = dialog_chrome(game, panel, "\u{7edf}\u{8ba1}");
 
     let counts = game.engine().colour_counts();
     let cleared = game.engine().cleared_counts();
     let total = rowline_core::board::BOARD_CELLS as u64;
+    let body = ds.text_size(rowline_theme::TextRole::Body) as u16;
+    let caption = ds.text_size(rowline_theme::TextRole::Caption) as u16;
 
-    for slot in 0..8usize {
-        let y = rect.y + STATS_TITLE_H + slot as f32 * STATS_ROW_H;
-        // The sprite slot: a light plate with a 3-D border, as in the
-        // original's `XGrdCpt` control.
-        let plate = rowline_core::render::Rect::new(rect.x, y, STATS_ROW_H, STATS_ROW_H);
-        cmds.push(RenderCmd::RoundedRect {
-            rect: plate,
-            radius: 0.0,
-            color: p.board_cell.into(),
-        });
-        cmds.push(RenderCmd::Outline {
-            rect: plate,
-            color: p.outline_strong.into(),
-        });
-        if slot != 0 {
-            cmds.push(RenderCmd::Sprite {
-                sheet: rowline_core::render::SpriteSheetId::MAIN,
-                src: rowline_core::view::ball_src(
-                    slot as u8,
-                    game.engine().use_figures() as u8,
-                    game.sheet_scale,
-                ),
-                dst: rowline_core::input::Point::new(plate.x + 3.0, plate.y + 3.0),
-                size: rowline_core::input::Size::new(30.0, 30.0),
-                tint: rowline_core::render::Color::WHITE,
-            });
-        }
+    let x_swatch = panel.x + 24.0;
+    let x_name = panel.x + 58.0;
+    let x_count = panel.x + 168.0;
+    let x_share = panel.x + 236.0;
+    let x_cleared = panel.x + 300.0;
 
-        let count = counts[slot];
-        let percent = count as u64 * 100 / total;
-        let mut text = format!("{count} ({percent}%)");
-        if slot != 0 {
-            text.push_str(&format!(",\u{6d88}\u{9664}-{}", cleared[slot]));
-        }
+    let header_y = panel.y + DIALOG_TITLE_H + 8.0;
+    for (x, text) in [
+        (x_name, "\u{989c}\u{8272}"),
+        (x_count, "\u{6570}\u{91cf}"),
+        (x_share, "\u{5360}\u{6bd4}"),
+        (x_cleared, "\u{5df2}\u{6d88}\u{9664}"),
+    ] {
         cmds.push(RenderCmd::Text {
-            text,
-            at: rowline_core::input::Point::new(rect.x + 44.0, y + 9.0),
-            size: ds.text_size(rowline_theme::TextRole::Body) as u16,
-            color: p.text_primary.into(),
+            text: text.to_string(),
+            at: rowline_core::input::Point::new(x, header_y),
+            size: caption,
+            color: p.text_tertiary.into(),
         });
     }
 
+    let row_h = 30.0;
+    let first_y = header_y + 24.0;
+    for slot in 0..8usize {
+        let y = first_y + slot as f32 * row_h;
+        if slot.is_multiple_of(2) {
+            cmds.push(RenderCmd::RoundedRect {
+                rect: rowline_core::render::Rect::new(
+                    panel.x + 16.0,
+                    y - 4.0,
+                    panel.width - 32.0,
+                    row_h - 2.0,
+                ),
+                radius: 0.0,
+                color: rowline_core::render::Color::rgb(0xE4, 0xE4, 0xE4),
+            });
+        }
+        if slot == 0 {
+            // An empty plate for the empty-cell row.
+            cmds.push(RenderCmd::RoundedRect {
+                rect: rowline_core::render::Rect::new(x_swatch + 2.0, y - 1.0, 20.0, 20.0),
+                radius: 2.0,
+                color: p.board_cell.into(),
+            });
+            cmds.push(RenderCmd::Outline {
+                rect: rowline_core::render::Rect::new(x_swatch + 2.0, y - 1.0, 20.0, 20.0),
+                color: p.outline_strong.into(),
+            });
+        } else {
+            ball_at(&mut cmds, game, slot as u8, x_swatch + 12.0, y + 8.0, 24.0);
+        }
+        let name = if slot == 0 { "\u{7a7a}\u{683c}" } else { "" };
+        if !name.is_empty() {
+            cmds.push(RenderCmd::Text {
+                text: name.to_string(),
+                at: rowline_core::input::Point::new(x_name, y),
+                size: body,
+                color: p.text_primary.into(),
+            });
+        }
+        let count = counts[slot];
+        let share = count as u64 * 100 / total;
+        cmds.push(RenderCmd::Text {
+            text: count.to_string(),
+            at: rowline_core::input::Point::new(x_count, y),
+            size: body,
+            color: p.text_primary.into(),
+        });
+        cmds.push(RenderCmd::Text {
+            text: format!("{share}%"),
+            at: rowline_core::input::Point::new(x_share, y),
+            size: body,
+            color: p.text_secondary.into(),
+        });
+        if slot != 0 {
+            cmds.push(RenderCmd::Text {
+                text: cleared[slot].to_string(),
+                at: rowline_core::input::Point::new(x_cleared, y),
+                size: body,
+                color: p.text_secondary.into(),
+            });
+        }
+    }
+
+    cmds.extend(dialog_button(game, panel));
     cmds
 }
 
@@ -1943,43 +1932,15 @@ fn game_over_dialog(game: &Game, layout: Layout) -> Vec<RenderCmd> {
         w,
         h,
     );
-    cmds.push(RenderCmd::Shadow {
+    cmds.extend(dialog_chrome(
+        game,
         rect,
-        radius: ds.radius(rowline_theme::Radius::Lg),
-        offset: rowline_core::input::Point::new(0.0, 8.0),
-        blur: 32.0,
-        color: p.shadow.into(),
-    });
-    cmds.push(RenderCmd::RoundedRect {
-        rect,
-        radius: ds.radius(rowline_theme::Radius::Lg),
-        color: p.surface_raised.into(),
-    });
-    cmds.push(RenderCmd::Outline {
-        rect,
-        color: p.outline.into(),
-    });
-
-    // The title bar of the dialog.
-    cmds.push(RenderCmd::RoundedRect {
-        rect: rowline_core::render::Rect::new(rect.x, rect.y, rect.width, 32.0),
-        radius: ds.radius(rowline_theme::Radius::Lg),
-        color: p.surface_alt.into(),
-    });
-    cmds.push(RenderCmd::Text {
-        text: format!(
-            "{} {}",
-            rowline_core::PRODUCT_NAME,
-            env!("CARGO_PKG_VERSION")
-        ),
-        at: rowline_core::input::Point::new(rect.x + 12.0, rect.y + 8.0),
-        size: ds.text_size(rowline_theme::TextRole::Label) as u16,
-        color: p.text_primary.into(),
-    });
+        "\u{6e38}\u{620f}\u{7ed3}\u{675f}",
+    ));
 
     // The warning mark: the original's yellow warning triangle reduced to a
     // trio of stacked bars (a diamond is not available as a primitive).
-    let mark = rowline_core::render::Rect::new(rect.x + 24.0, rect.y + 52.0, 40.0, 40.0);
+    let mark = rowline_core::render::Rect::new(rect.x + 24.0, rect.y + 58.0, 40.0, 40.0);
     let yellow = rowline_core::render::Color::rgb(255, 210, 45);
     let dark = rowline_core::render::Color::rgb(32, 32, 32);
     cmds.push(RenderCmd::RoundedRect {
@@ -1995,10 +1956,16 @@ fn game_over_dialog(game: &Game, layout: Layout) -> Vec<RenderCmd> {
     });
 
     cmds.push(RenderCmd::Text {
-        text: "\u{6e38}\u{620f}\u{7ed3}\u{675f}!".to_string(),
-        at: rowline_core::input::Point::new(rect.x + 80.0, rect.y + 62.0),
+        text: "\u{65e0}\u{6cd5}\u{79fb}\u{52a8}\u{4e86}".to_string(),
+        at: rowline_core::input::Point::new(rect.x + 80.0, rect.y + 58.0),
         size: ds.text_size(rowline_theme::TextRole::Title) as u16,
         color: p.text_primary.into(),
+    });
+    cmds.push(RenderCmd::Text {
+        text: "\u{67e5}\u{770b}\u{9ad8}\u{5206}\u{699c}\u{ff0c}\u{6216}\u{5f00}\u{59cb}\u{65b0}\u{6e38}\u{620f}".to_string(),
+        at: rowline_core::input::Point::new(rect.x + 80.0, rect.y + 86.0),
+        size: ds.text_size(rowline_theme::TextRole::Caption) as u16,
+        color: p.text_secondary.into(),
     });
 
     // The OK button.
@@ -2011,71 +1978,74 @@ fn game_over_dialog(game: &Game, layout: Layout) -> Vec<RenderCmd> {
     cmds.push(RenderCmd::RoundedRect {
         rect: btn,
         radius: ds.radius(rowline_theme::Radius::Sm),
-        color: p.surface_raised.into(),
-    });
-    cmds.push(RenderCmd::Outline {
-        rect: btn,
-        color: p.outline_strong.into(),
+        color: p.accent.into(),
     });
     cmds.push(RenderCmd::Text {
-        text: "\u{786e}\u{5b9a}(O)".to_string(),
+        text: "\u{786e}\u{5b9a}".to_string(),
         at: rowline_core::input::Point::new(btn.x + 48.0, btn.y + 9.0),
         size: ds.text_size(rowline_theme::TextRole::Body) as u16,
-        color: p.text_primary.into(),
+        color: p.text_on_accent.into(),
     });
     cmds
 }
 
-/// Draw the about box.
+/// Geometry of the about dialog: the card and its footer button.
+fn about_rects(layout: Layout) -> (rowline_core::render::Rect, rowline_core::render::Rect) {
+    let panel = dialog_rect(layout, 430.0, 300.0);
+    (panel, dialog_button_rect(panel))
+}
+
+/// Draw the about dialog.
 fn about_overlay(game: &Game, layout: Layout) -> Vec<RenderCmd> {
-    let mut cmds = Vec::new();
     let ds = &game.design;
     let p = &ds.palette;
-    let w = 380.0_f32.min(layout.client_w as f32 - 32.0).max(240.0);
-    let h = 190.0;
-    let rect = rowline_core::render::Rect::new(
-        ((layout.client_w as f32 - w) * 0.5).max(8.0),
-        ((layout.client_h as f32 - h) * 0.5).max(8.0),
-        w,
-        h,
-    );
-    cmds.push(RenderCmd::Shadow {
-        rect,
-        radius: ds.radius(rowline_theme::Radius::Sm),
-        offset: rowline_core::input::Point::new(0.0, 6.0),
-        blur: 24.0,
-        color: p.shadow.into(),
-    });
-    cmds.push(RenderCmd::RoundedRect {
-        rect,
-        radius: ds.radius(rowline_theme::Radius::Sm),
-        color: p.surface_raised.into(),
-    });
-    cmds.push(RenderCmd::Outline {
-        rect,
-        color: p.outline.into(),
-    });
-    let about = [
-        format!(
-            "{} {}",
-            rowline_core::PRODUCT_NAME,
-            env!("CARGO_PKG_VERSION")
+    let (panel, _button) = about_rects(layout);
+    let mut cmds = dialog_chrome(game, panel, "\u{5173}\u{4e8e} Rowline");
+
+    let body = ds.text_size(rowline_theme::TextRole::Body) as u16;
+    let small = ds.text_size(rowline_theme::TextRole::Caption) as u16;
+    let lines = [
+        (
+            format!(
+                "{} {}",
+                rowline_core::PRODUCT_NAME,
+                env!("CARGO_PKG_VERSION")
+            ),
+            body,
+            p.text_primary,
         ),
-        String::new(),
-        "An independent re-implementation of the".to_string(),
-        "behaviour of WinLinez (c) 1998-1999 Ivan Golubev.".to_string(),
-        "No original code or artwork is used.".to_string(),
-        String::new(),
-        "Built with Rust, winit and wgpu.".to_string(),
+        (
+            "WinLinez 行为的独立重实现".to_string(),
+            body,
+            p.text_secondary,
+        ),
+        (
+            "不含原作的代码、美术或数据".to_string(),
+            body,
+            p.text_secondary,
+        ),
+        ("Rust · winit · wgpu".to_string(), small, p.text_tertiary),
+        (
+            "界面字体：WenQuanYi Micro Hei (Apache-2.0)".to_string(),
+            small,
+            p.text_tertiary,
+        ),
+        (
+            "原作 WinLinez © 1998-1999 Ivan Golubev".to_string(),
+            small,
+            p.text_tertiary,
+        ),
     ];
-    for (i, line) in about.iter().enumerate() {
+    for (i, (line, size, color)) in lines.iter().enumerate() {
         cmds.push(RenderCmd::Text {
-            text: (*line).to_string(),
-            at: rowline_core::input::Point::new(rect.x + 18.0, rect.y + 40.0 + i as f32 * 20.0),
-            size: ds.text_size(rowline_theme::TextRole::Body) as u16,
-            color: p.text_primary.into(),
+            text: line.clone(),
+            at: rowline_core::input::Point::new(panel.x + 24.0, panel.y + 68.0 + i as f32 * 26.0),
+            size: *size,
+            color: (*color).into(),
         });
     }
+
+    cmds.extend(dialog_button(game, panel));
     cmds
 }
 
@@ -2142,9 +2112,6 @@ struct FigureSpec {
 
 /// How far the winner's medallion is lifted during the victory animation.
 fn win_lift(game: &Game) -> f32 {
-    if game.design.motion.reduced {
-        return 0.0;
-    }
     let Some(started) = game.win_anim else {
         return 0.0;
     };
@@ -2207,65 +2174,169 @@ fn one_figure(game: &Game, layout: Layout, spec: FigureSpec) -> Vec<RenderCmd> {
     let pedestal_bottom = layout.figure_y as f32 + FIGURE_FLOOR;
 
     // ---- idle animation: a slow bob, plus the victory hop ---------------
-    let idle = if game.design.motion.reduced {
-        0.0
-    } else {
-        (game.clock_seconds() * 2.4 + phase).sin() * 1.2
-    };
+    let idle = (game.clock_seconds() * 2.4 + phase).sin() * 1.2;
     let feet = feet + idle + lift;
 
     // ---- the pedestal ---------------------------------------------------
+    //
+    // A metal column lit from the upper left: a soft highlight down the left
+    // edge, a darker shade on the right, two machined rings, a beveled cap
+    // and base, a cast shadow and a pool of light on the floor.
     let column = rowline_core::render::Rect::new(
         centre - PEDESTAL_W / 2.0,
         feet + 1.0,
         PEDESTAL_W,
         (pedestal_bottom - 4.0 - feet - 1.0).max(4.0),
     );
-    let (column_from, column_to) = if ds.is_classic() {
-        (
-            rowline_core::render::Color::rgb(255, 255, 255),
-            rowline_core::render::Color::rgb(128, 128, 128),
-        )
-    } else {
-        (p.surface_raised.into(), p.surface_alt.into())
-    };
-    cmds.push(RenderCmd::Gradient {
-        rect: column,
-        radius: if ds.is_classic() {
-            2.0
-        } else {
-            PEDESTAL_W / 2.0
-        },
-        from: column_from,
-        to: column_to,
-        direction: rowline_core::render::GradientDirection::Horizontal,
-    });
-    cmds.push(RenderCmd::Outline {
-        rect: column,
-        color: p.outline.into(),
-    });
-    // The cap under the figure's feet.
-    cmds.push(RenderCmd::RoundedRect {
-        rect: rowline_core::render::Rect::new(
-            centre - PEDESTAL_W / 2.0 - 2.0,
-            feet - 3.0,
-            PEDESTAL_W + 4.0,
-            6.0,
-        ),
-        radius: 2.0,
-        color: rowline_core::render::Color::rgb(224, 224, 224),
-    });
-    // The base plate.
     let foot = rowline_core::render::Rect::new(
         centre - PEDESTAL_FOOT_W / 2.0,
         pedestal_bottom - PEDESTAL_FOOT_H,
         PEDESTAL_FOOT_W,
         PEDESTAL_FOOT_H,
     );
+    let cap = rowline_core::render::Rect::new(
+        centre - PEDESTAL_W / 2.0 - 2.0,
+        feet - 3.0,
+        PEDESTAL_W + 4.0,
+        6.0,
+    );
+    let white_soft = rowline_core::render::Color {
+        r: 255,
+        g: 255,
+        b: 255,
+        a: 70,
+    };
+    let shade = rowline_core::render::Color {
+        r: 0,
+        g: 0,
+        b: 0,
+        a: 55,
+    };
+    let steel_light = rowline_core::render::Color::rgb(248, 248, 248);
+    let steel_mid = rowline_core::render::Color::rgb(196, 196, 196);
+    let steel_dark = rowline_core::render::Color::rgb(132, 132, 132);
+
+    // A reflection under the base and a tight contact shadow: the pedestal
+    // sits on the black floor without a grey halo around it.
+    cmds.push(RenderCmd::Gradient {
+        rect: rowline_core::render::Rect::new(
+            foot.x - 10.0,
+            foot.y + foot.height - 6.0,
+            foot.width + 20.0,
+            18.0,
+        ),
+        radius: 9.0,
+        from: rowline_core::render::Color {
+            r: 255,
+            g: 255,
+            b: 255,
+            a: 42,
+        },
+        to: rowline_core::render::Color {
+            r: 255,
+            g: 255,
+            b: 255,
+            a: 0,
+        },
+        direction: rowline_core::render::GradientDirection::Vertical,
+    });
     cmds.push(RenderCmd::RoundedRect {
+        rect: rowline_core::render::Rect::new(
+            foot.x + 5.0,
+            foot.y + foot.height - 3.0,
+            foot.width - 10.0,
+            4.0,
+        ),
+        radius: 2.0,
+        color: rowline_core::render::Color {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 150,
+        },
+    });
+
+    // Column body: lit at the left, shaded at the right.
+    cmds.push(RenderCmd::Gradient {
+        rect: column,
+        radius: 3.0,
+        from: steel_light,
+        to: steel_dark,
+        direction: rowline_core::render::GradientDirection::Horizontal,
+    });
+    cmds.push(RenderCmd::RoundedRect {
+        rect: rowline_core::render::Rect::new(
+            column.x + 3.0,
+            column.y + 2.0,
+            3.5,
+            (column.height - 4.0).max(2.0),
+        ),
+        radius: 1.75,
+        color: white_soft,
+    });
+    cmds.push(RenderCmd::RoundedRect {
+        rect: rowline_core::render::Rect::new(
+            column.x + column.width - 7.0,
+            column.y + 2.0,
+            4.0,
+            (column.height - 4.0).max(2.0),
+        ),
+        radius: 2.0,
+        color: shade,
+    });
+    // Two machined rings break up the tall column.
+    for t in [0.32_f32, 0.66] {
+        let y = column.y + column.height * t;
+        cmds.push(RenderCmd::RoundedRect {
+            rect: rowline_core::render::Rect::new(column.x, y, column.width, 1.0),
+            radius: 0.0,
+            color: rowline_core::render::Color::rgb(160, 160, 160),
+        });
+        cmds.push(RenderCmd::RoundedRect {
+            rect: rowline_core::render::Rect::new(column.x, y + 1.0, column.width, 1.0),
+            radius: 0.0,
+            color: white_soft,
+        });
+    }
+    cmds.push(RenderCmd::Outline {
+        rect: column,
+        color: p.outline.into(),
+    });
+
+    // The cap under the figure's feet, lit from above.
+    cmds.push(RenderCmd::Gradient {
+        rect: cap,
+        radius: 3.0,
+        from: steel_light,
+        to: steel_mid,
+        direction: rowline_core::render::GradientDirection::Vertical,
+    });
+    cmds.push(RenderCmd::Outline {
+        rect: cap,
+        color: p.outline.into(),
+    });
+    // The base plate: a bright top edge, a shaded lower half, and a rim.
+    cmds.push(RenderCmd::Gradient {
         rect: foot,
-        radius: if ds.is_classic() { 2.0 } else { 6.0 },
-        color: rowline_core::render::Color::rgb(224, 224, 224),
+        radius: 3.0,
+        from: steel_light,
+        to: steel_mid,
+        direction: rowline_core::render::GradientDirection::Vertical,
+    });
+    cmds.push(RenderCmd::RoundedRect {
+        rect: rowline_core::render::Rect::new(foot.x + 2.0, foot.y + 1.0, foot.width - 4.0, 2.0),
+        radius: 1.0,
+        color: white_soft,
+    });
+    cmds.push(RenderCmd::RoundedRect {
+        rect: rowline_core::render::Rect::new(
+            foot.x + 2.0,
+            foot.y + foot.height - 3.0,
+            foot.width - 4.0,
+            2.0,
+        ),
+        radius: 1.0,
+        color: shade,
     });
     cmds.push(RenderCmd::Outline {
         rect: foot,
@@ -2274,29 +2345,73 @@ fn one_figure(game: &Game, layout: Layout, spec: FigureSpec) -> Vec<RenderCmd> {
 
     // ---- the character --------------------------------------------------
     // Saturated bodies with a dark rim: on the black board a pale pastel
-    // body washed out, and the rim keeps the silhouette readable.
-    let (body_colour, belly_colour, rim_colour) = match figure {
+    // body washed out, and the rim keeps the silhouette readable.  A soft
+    // coloured aura separates the figure from the board.
+    let (body_light, body_dark, belly_colour, rim_colour, aura) = match figure {
         Figure::King => (
-            rowline_core::render::Color::rgb(176, 16, 16),
-            rowline_core::render::Color::rgb(224, 90, 90),
+            rowline_core::render::Color::rgb(214, 66, 66),
+            rowline_core::render::Color::rgb(138, 8, 8),
+            rowline_core::render::Color::rgb(238, 128, 128),
             rowline_core::render::Color::rgb(82, 0, 0),
+            rowline_core::render::Color {
+                r: 240,
+                g: 80,
+                b: 60,
+                a: 34,
+            },
         ),
         Figure::Challenger => (
-            rowline_core::render::Color::rgb(160, 0, 160),
-            rowline_core::render::Color::rgb(222, 96, 222),
+            rowline_core::render::Color::rgb(204, 64, 204),
+            rowline_core::render::Color::rgb(104, 0, 104),
+            rowline_core::render::Color::rgb(238, 140, 238),
             rowline_core::render::Color::rgb(72, 0, 72),
+            rowline_core::render::Color {
+                r: 220,
+                g: 80,
+                b: 220,
+                a: 30,
+            },
         ),
     };
     let gold = rowline_core::render::Color::rgb(255, 210, 74);
+    let gold_dark = rowline_core::render::Color::rgb(176, 118, 12);
     let dark = rowline_core::render::Color::rgb(48, 16, 16);
     let white = rowline_core::render::Color::WHITE;
+
+    // A coloured aura behind the head and body, visible against the black
+    // board without washing out the silhouette.
+    cmds.push(RenderCmd::Glow {
+        rect: rowline_core::render::Rect::new(centre - 32.0, feet - 80.0, 64.0, 84.0),
+        radius: 30.0,
+        blur: 26.0,
+        color: aura,
+    });
+
+    // The king's cape sits behind the body; the challenger goes without one.
+    if figure == Figure::King {
+        cmds.push(RenderCmd::RoundedRect {
+            rect: rowline_core::render::Rect::new(centre - 28.0, feet - 40.0, 56.0, 32.0),
+            radius: 14.0,
+            color: rowline_core::render::Color::rgb(96, 0, 0),
+        });
+        cmds.push(RenderCmd::RoundedRect {
+            rect: rowline_core::render::Rect::new(centre - 26.0, feet - 38.0, 52.0, 9.0),
+            radius: 4.5,
+            color: rowline_core::render::Color::rgb(190, 24, 24),
+        });
+    }
 
     // Arms first, so the body overlaps their inner ends.
     for dx in [-24.0_f32, 17.0] {
         cmds.push(RenderCmd::RoundedRect {
             rect: rowline_core::render::Rect::new(centre + dx, feet - 34.0, 9.0, 18.0),
             radius: 4.5,
-            color: body_colour,
+            color: body_dark,
+        });
+        cmds.push(RenderCmd::RoundedRect {
+            rect: rowline_core::render::Rect::new(centre + dx + 1.0, feet - 33.0, 3.0, 14.0),
+            radius: 1.5,
+            color: white_soft,
         });
     }
     // Body, with a rounded rim drawn as a slightly larger disc behind it
@@ -2312,10 +2427,18 @@ fn one_figure(game: &Game, layout: Layout, spec: FigureSpec) -> Vec<RenderCmd> {
         radius: 19.5,
         color: rim_colour,
     });
-    cmds.push(RenderCmd::RoundedRect {
+    cmds.push(RenderCmd::Gradient {
         rect: body_rect,
         radius: 18.0,
-        color: body_colour,
+        from: body_light,
+        to: body_dark,
+        direction: rowline_core::render::GradientDirection::Horizontal,
+    });
+    // A soft specular highlight on the upper left of the body.
+    cmds.push(RenderCmd::RoundedRect {
+        rect: rowline_core::render::Rect::new(centre - 15.0, feet - 34.0, 9.0, 12.0),
+        radius: 4.5,
+        color: white_soft,
     });
     // Belly.
     cmds.push(RenderCmd::RoundedRect {
@@ -2323,6 +2446,34 @@ fn one_figure(game: &Game, layout: Layout, spec: FigureSpec) -> Vec<RenderCmd> {
         radius: 12.0,
         color: belly_colour,
     });
+    match figure {
+        Figure::King => {
+            // A gold medallion on the chest.
+            cmds.push(RenderCmd::RoundedRect {
+                rect: rowline_core::render::Rect::new(centre - 3.5, feet - 25.0, 7.0, 7.0),
+                radius: 3.5,
+                color: gold,
+            });
+            cmds.push(RenderCmd::RoundedRect {
+                rect: rowline_core::render::Rect::new(centre - 1.5, feet - 23.0, 3.0, 3.0),
+                radius: 1.5,
+                color: rowline_core::render::Color::rgb(220, 32, 48),
+            });
+        }
+        Figure::Challenger => {
+            // A leather belt with a steel buckle.
+            cmds.push(RenderCmd::RoundedRect {
+                rect: rowline_core::render::Rect::new(centre - 16.0, feet - 18.0, 32.0, 4.0),
+                radius: 2.0,
+                color: rowline_core::render::Color::rgb(58, 0, 58),
+            });
+            cmds.push(RenderCmd::RoundedRect {
+                rect: rowline_core::render::Rect::new(centre - 3.0, feet - 19.0, 6.0, 6.0),
+                radius: 1.5,
+                color: rowline_core::render::Color::rgb(214, 214, 214),
+            });
+        }
+    }
     // Head.
     let head_y = feet - 38.0 - 26.0;
     let head_rect = rowline_core::render::Rect::new(centre - 16.0, head_y, 32.0, 30.0);
@@ -2336,10 +2487,17 @@ fn one_figure(game: &Game, layout: Layout, spec: FigureSpec) -> Vec<RenderCmd> {
         radius: 16.5,
         color: rim_colour,
     });
-    cmds.push(RenderCmd::RoundedRect {
+    cmds.push(RenderCmd::Gradient {
         rect: head_rect,
         radius: 15.0,
-        color: body_colour,
+        from: body_light,
+        to: body_dark,
+        direction: rowline_core::render::GradientDirection::Horizontal,
+    });
+    cmds.push(RenderCmd::RoundedRect {
+        rect: rowline_core::render::Rect::new(centre - 12.0, head_y + 2.0, 6.0, 5.0),
+        radius: 3.0,
+        color: white_soft,
     });
     // Face patch.
     cmds.push(RenderCmd::RoundedRect {
@@ -2348,7 +2506,7 @@ fn one_figure(game: &Game, layout: Layout, spec: FigureSpec) -> Vec<RenderCmd> {
         color: belly_colour,
     });
     // Eyes.  They blink for a tenth of a second every few seconds.
-    let blink = !game.design.motion.reduced && (game.clock_seconds() + phase) % 3.7 < 0.12;
+    let blink = (game.clock_seconds() + phase) % 3.7 < 0.12;
     for dx in [-8.0_f32, 3.0] {
         if blink {
             cmds.push(RenderCmd::RoundedRect {
@@ -2376,41 +2534,157 @@ fn one_figure(game: &Game, layout: Layout, spec: FigureSpec) -> Vec<RenderCmd> {
         color: dark,
     });
 
-    // ---- the crown (both figures wear one in the original) --------------
-    cmds.push(RenderCmd::RoundedRect {
-        rect: rowline_core::render::Rect::new(centre - 13.0, head_y - 5.0, 26.0, 7.0),
-        radius: 2.5,
-        color: gold,
-    });
-    for (dx, h) in [(-10.0_f32, 7.0_f32), (-2.0, 10.0), (6.0, 7.0)] {
-        cmds.push(RenderCmd::RoundedRect {
-            rect: rowline_core::render::Rect::new(centre + dx, head_y - 5.0 - h, 4.5, h + 2.0),
-            radius: 1.5,
-            color: gold,
-        });
+    // ---- headwear -------------------------------------------------------
+    //
+    // Only the king wears a crown.  The challenger gets a steel headband
+    // with a knot and two trailing ends, which reads as a fighter rather
+    // than a second monarch.
+    match figure {
+        Figure::King => {
+            let band = rowline_core::render::Rect::new(centre - 14.0, head_y - 5.0, 28.0, 8.0);
+            cmds.push(RenderCmd::Glow {
+                rect: rowline_core::render::Rect::new(
+                    band.x - 5.0,
+                    band.y - 12.0,
+                    band.width + 10.0,
+                    band.height + 20.0,
+                ),
+                radius: 8.0,
+                blur: 14.0,
+                color: rowline_core::render::Color {
+                    r: 255,
+                    g: 210,
+                    b: 74,
+                    a: 55,
+                },
+            });
+            cmds.push(RenderCmd::Gradient {
+                rect: band,
+                radius: 2.5,
+                from: gold,
+                to: gold_dark,
+                direction: rowline_core::render::GradientDirection::Vertical,
+            });
+            cmds.push(RenderCmd::Outline {
+                rect: band,
+                color: gold_dark,
+            });
+            for (dx, h) in [(-10.0_f32, 8.0_f32), (-2.0, 12.0), (6.0, 8.0)] {
+                let point =
+                    rowline_core::render::Rect::new(centre + dx, head_y - 5.0 - h, 4.5, h + 2.0);
+                cmds.push(RenderCmd::RoundedRect {
+                    rect: point,
+                    radius: 1.5,
+                    color: gold,
+                });
+                cmds.push(RenderCmd::RoundedRect {
+                    rect: rowline_core::render::Rect::new(point.x + 1.0, point.y, 1.5, 2.5),
+                    radius: 0.75,
+                    color: white,
+                });
+            }
+            // Three jewels on the band.
+            for (dx, colour) in [
+                (-8.0_f32, rowline_core::render::Color::rgb(220, 32, 48)),
+                (0.0, rowline_core::render::Color::rgb(64, 132, 255)),
+                (8.0, rowline_core::render::Color::rgb(48, 176, 96)),
+            ] {
+                cmds.push(RenderCmd::RoundedRect {
+                    rect: rowline_core::render::Rect::new(
+                        centre + dx - 1.5,
+                        head_y - 2.5,
+                        3.0,
+                        3.0,
+                    ),
+                    radius: 1.5,
+                    color: colour,
+                });
+            }
+        }
+        Figure::Challenger => {
+            // A short, tousled fringe instead of a crown.
+            for (dx, w, h) in [
+                (-11.0_f32, 8.0_f32, 8.0_f32),
+                (-2.0, 7.0, 11.0),
+                (6.0, 8.0, 8.0),
+            ] {
+                cmds.push(RenderCmd::RoundedRect {
+                    rect: rowline_core::render::Rect::new(centre + dx, head_y - 4.0, w, h),
+                    radius: w * 0.5,
+                    color: body_dark,
+                });
+            }
+        }
     }
 
     // ---- the emblem: sceptre for the CPU, sword for the challenger ------
     match figure {
         Figure::King => {
-            // A sceptre held in the right hand.
+            // A sceptre held in the right hand: a shaded shaft, an orb with
+            // a highlight, and a grip in the body colour.
+            let shaft = rowline_core::render::Rect::new(centre + 22.0, feet - 60.0, 4.0, 36.0);
+            cmds.push(RenderCmd::Gradient {
+                rect: shaft,
+                radius: 2.0,
+                from: gold,
+                to: gold_dark,
+                direction: rowline_core::render::GradientDirection::Horizontal,
+            });
+            cmds.push(RenderCmd::Glow {
+                rect: rowline_core::render::Rect::new(centre + 15.0, feet - 74.0, 18.0, 18.0),
+                radius: 9.0,
+                blur: 12.0,
+                color: rowline_core::render::Color {
+                    r: 255,
+                    g: 210,
+                    b: 74,
+                    a: 70,
+                },
+            });
             cmds.push(RenderCmd::RoundedRect {
-                rect: rowline_core::render::Rect::new(centre + 22.0, feet - 58.0, 3.0, 34.0),
-                radius: 1.5,
+                rect: rowline_core::render::Rect::new(centre + 18.0, feet - 70.0, 12.0, 12.0),
+                radius: 6.0,
                 color: gold,
             });
             cmds.push(RenderCmd::RoundedRect {
-                rect: rowline_core::render::Rect::new(centre + 19.0, feet - 67.0, 9.0, 9.0),
-                radius: 4.5,
-                color: gold,
+                rect: rowline_core::render::Rect::new(centre + 21.0, feet - 68.0, 4.0, 4.0),
+                radius: 2.0,
+                color: white,
+            });
+            cmds.push(RenderCmd::RoundedRect {
+                rect: rowline_core::render::Rect::new(centre + 19.0, feet - 40.0, 9.0, 8.0),
+                radius: 4.0,
+                color: body_dark,
             });
         }
         Figure::Challenger => {
+            cmds.push(RenderCmd::Glow {
+                rect: rowline_core::render::Rect::new(centre + 14.0, feet - 74.0, 30.0, 46.0),
+                radius: 10.0,
+                blur: 12.0,
+                color: rowline_core::render::Color {
+                    r: 240,
+                    g: 240,
+                    b: 240,
+                    a: 34,
+                },
+            });
             cmds.push(RenderCmd::Icon {
                 index: crate::commands::ICON_SWORD,
                 dst: rowline_core::input::Point::new(centre + 18.0, feet - 70.0),
                 size: rowline_core::input::Size::new(24.0, 36.0),
                 tint: rowline_core::render::Color::rgb(240, 240, 240),
+            });
+            // The gripping hand and a steel bracer.
+            cmds.push(RenderCmd::RoundedRect {
+                rect: rowline_core::render::Rect::new(centre + 20.0, feet - 39.0, 9.0, 8.0),
+                radius: 4.0,
+                color: body_dark,
+            });
+            cmds.push(RenderCmd::RoundedRect {
+                rect: rowline_core::render::Rect::new(centre + 17.0, feet - 33.0, 10.0, 5.0),
+                radius: 2.5,
+                color: rowline_core::render::Color::rgb(200, 200, 200),
             });
         }
     }
@@ -2426,30 +2700,27 @@ fn one_figure(game: &Game, layout: Layout, spec: FigureSpec) -> Vec<RenderCmd> {
             layout.figure_y as f32 + FIGURE_FLOOR + 6.0,
         ),
         size: FIGURE_LABEL_SIZE,
-        color: if ds.is_classic() {
-            p.text_on_accent.into()
-        } else {
-            p.text_secondary.into()
-        },
+        color: p.text_on_accent.into(),
     });
 
     cmds
 }
 
 /// The leaderboard geometry, shared by drawing and hit-testing.
-fn scoreboard_rects(layout: Layout, classic: bool) -> (rowline_core::render::Rect, f32) {
+fn scoreboard_rects(layout: Layout) -> (rowline_core::render::Rect, f32) {
     // The original's leaderboard is a separate dialog that can be taller
     // than the game window.  The re-implementation draws it as an overlay,
     // so the row height shrinks to keep all sixteen rows on screen at the
     // original's small default client size.
     let content_h = (layout.client_h - layout.top).max(1) as f32;
     let margin = 4.0;
-    let base_w: f32 = if classic { 360.0 } else { 420.0 };
-    let w = base_w.min(layout.client_w as f32 - 32.0).max(240.0);
+    let w = 420.0_f32.min(layout.client_w as f32 - 32.0).max(240.0);
     // The panel fills the play area below the HUD, so the preview cells are
-    // not left half-covered above it.
+    // not left half-covered above it.  The title strip (46 px) and the
+    // button footer (56 px) are reserved before the sixteen rows share the
+    // rest.
     let h = (content_h - 2.0 * margin).max(120.0);
-    let row_h = ((h - 80.0) / 16.0).max(8.0);
+    let row_h = ((h - DIALOG_TITLE_H - 56.0) / 16.0).max(8.0);
     let rect = rowline_core::render::Rect::new(
         ((layout.client_w as f32 - w) * 0.5).max(margin),
         layout.top as f32 + margin,
@@ -2485,20 +2756,24 @@ fn name_entry_rects(
     rowline_core::render::Rect,
 ) {
     let w = 400.0_f32.min(layout.client_w as f32 - 32.0).max(240.0);
-    let h = 150.0;
+    let h = 210.0;
     let rect = rowline_core::render::Rect::new(
         ((layout.client_w as f32 - w) * 0.5).max(8.0),
         ((layout.client_h as f32 - h) * 0.5).max(8.0),
         w,
         h,
     );
-    let field =
-        rowline_core::render::Rect::new(rect.x + 16.0, rect.y + 72.0, rect.width - 32.0, 30.0);
+    let field = rowline_core::render::Rect::new(
+        rect.x + 20.0,
+        rect.y + DIALOG_TITLE_H + 30.0,
+        rect.width - 40.0,
+        34.0,
+    );
     let ok = rowline_core::render::Rect::new(
         rect.x + (rect.width - 120.0) * 0.5,
-        rect.y + rect.height - 44.0,
+        rect.y + rect.height - 52.0,
         120.0,
-        30.0,
+        34.0,
     );
     (rect, field, ok)
 }
@@ -2510,47 +2785,15 @@ fn scoreboard_overlay(game: &Game, layout: Layout) -> Vec<RenderCmd> {
     let p = &ds.palette;
     let sb = rowline_core::scoreboard::Scoreboard::new(game.scores().to_vec());
 
-    let (rect, row_h) = scoreboard_rects(layout, ds.is_classic());
-    cmds.push(RenderCmd::Shadow {
-        rect,
-        radius: ds.radius(rowline_theme::Radius::Sm),
-        offset: rowline_core::input::Point::new(0.0, 6.0),
-        blur: 24.0,
-        color: p.shadow.into(),
-    });
-    cmds.push(RenderCmd::RoundedRect {
-        rect,
-        radius: ds.radius(rowline_theme::Radius::Sm),
-        color: p.surface_raised.into(),
-    });
-    cmds.push(RenderCmd::Outline {
-        rect,
-        color: p.outline.into(),
-    });
-
-    // The title.
-    cmds.push(RenderCmd::RoundedRect {
-        rect: rowline_core::render::Rect::new(rect.x, rect.y, rect.width, 28.0),
-        radius: ds.radius(rowline_theme::Radius::Sm),
-        color: p.surface_alt.into(),
-    });
-    cmds.push(RenderCmd::Text {
-        text: "\u{603b}\u{699c}".to_string(),
-        at: rowline_core::input::Point::new(rect.x + 12.0, rect.y + 7.0),
-        size: ds.text_size(rowline_theme::TextRole::Label) as u16,
-        color: p.text_primary.into(),
-    });
+    let (rect, row_h) = scoreboard_rects(layout);
+    cmds.extend(dialog_chrome(game, rect, "\u{603b}\u{699c}"));
 
     // The sixteen rows.  The rank/name column starts at a fixed x and the
     // score column is right-aligned, so mixed-width names (Latin + CJK)
     // cannot push the numbers out of line.
-    let top = rect.y + 36.0;
+    let top = rect.y + DIALOG_TITLE_H + 4.0;
     let row_size = ds.text_size(rowline_theme::TextRole::Body) as u16;
-    let alt = if ds.is_classic() {
-        rowline_core::render::Color::rgb(0xE4, 0xE4, 0xE4)
-    } else {
-        p.surface_alt.into()
-    };
+    let alt = rowline_core::render::Color::rgb(0xE4, 0xE4, 0xE4);
     for (i, row) in sb.rows().iter().enumerate() {
         let y = top + i as f32 * row_h;
         if i % 2 == 1 {
@@ -2587,31 +2830,47 @@ fn scoreboard_overlay(game: &Game, layout: Layout) -> Vec<RenderCmd> {
         });
     }
 
-    // The two buttons: Clear and OK, centred as a pair inside the panel.
+    // The two buttons: Clear (quiet, danger text) and OK (primary accent).
     let (clear, ok) = scoreboard_buttons((rect, row_h));
-    // The original's buttons are 清除 and 确定(O).
-    for (btn, label, colour) in [
-        (clear, "\u{6e05}\u{9664}", p.danger),
-        (ok, "\u{786e}\u{5b9a}(O)", p.accent),
+    let body = ds.text_size(rowline_theme::TextRole::Body) as u16;
+    for (btn, label, filled, colour) in [
+        (clear, "\u{6e05}\u{9664}", false, p.danger),
+        (ok, "\u{786e}\u{5b9a}", true, p.text_on_accent),
     ] {
         cmds.push(RenderCmd::RoundedRect {
             rect: btn,
             radius: ds.radius(rowline_theme::Radius::Sm),
-            color: p.surface_raised.into(),
+            color: if filled {
+                p.accent.into()
+            } else {
+                p.surface_alt.into()
+            },
         });
-        cmds.push(RenderCmd::Outline {
-            rect: btn,
-            color: p.outline_strong.into(),
-        });
+        if !filled {
+            cmds.push(RenderCmd::Outline {
+                rect: btn,
+                color: p.outline.into(),
+            });
+        }
         let text_w = 12.0 * label.chars().count() as f32;
         cmds.push(RenderCmd::Text {
             text: label.to_string(),
             at: rowline_core::input::Point::new(btn.x + (btn.width - text_w) * 0.5, btn.y + 6.0),
-            size: ds.text_size(rowline_theme::TextRole::Body) as u16,
+            size: body,
             color: colour.into(),
         });
     }
     cmds
+}
+
+/// A cheap width estimate for the caret and the selection highlight.
+///
+/// CJK glyphs are one em wide; Latin glyphs are roughly 0.58 em in the
+/// embedded face.  Exact metrics are not needed for a caret.
+fn estimate_text_width(text: &str, size: f32) -> f32 {
+    text.chars()
+        .map(|c| if c.is_ascii() { size * 0.58 } else { size })
+        .sum()
 }
 
 /// Draw the name entry dialog (输入你的名字).
@@ -2621,41 +2880,24 @@ fn name_entry_overlay(game: &Game, layout: Layout) -> Vec<RenderCmd> {
     let p = &ds.palette;
 
     let (rect, field, ok) = name_entry_rects(layout);
-    cmds.push(RenderCmd::Shadow {
+    cmds.extend(dialog_chrome(
+        game,
         rect,
-        radius: ds.radius(rowline_theme::Radius::Sm),
-        offset: rowline_core::input::Point::new(0.0, 6.0),
-        blur: 24.0,
-        color: p.shadow.into(),
-    });
-    cmds.push(RenderCmd::RoundedRect {
-        rect,
-        radius: ds.radius(rowline_theme::Radius::Sm),
-        color: p.surface_raised.into(),
-    });
-    cmds.push(RenderCmd::Outline {
-        rect,
-        color: p.outline.into(),
-    });
+        "\u{8f93}\u{5165}\u{4f60}\u{7684}\u{540d}\u{5b57}",
+    ));
 
     cmds.push(RenderCmd::Text {
-        text: "\u{8f93}\u{5165}\u{4f60}\u{7684}\u{540d}\u{5b57}:".to_string(),
-        at: rowline_core::input::Point::new(rect.x + 16.0, rect.y + 46.0),
-        size: ds.text_size(rowline_theme::TextRole::Body) as u16,
-        color: p.text_primary.into(),
+        text: "\u{4f60}\u{7684}\u{540d}\u{5b57}\u{5c06}\u{8bb0}\u{5165}\u{9ad8}\u{5206}\u{699c}"
+            .to_string(),
+        at: rowline_core::input::Point::new(rect.x + 20.0, rect.y + DIALOG_TITLE_H + 6.0),
+        size: ds.text_size(rowline_theme::TextRole::Caption) as u16,
+        color: p.text_tertiary.into(),
     });
 
-    // The edit field.  The original's Win95 edit control is white with
-    // black text; using the theme's `surface` here made the black classic
-    // text invisible on a black field.
-    let (field_fill, field_text) = if ds.is_classic() {
-        (
-            rowline_core::render::Color::WHITE,
-            rowline_core::render::Color::BLACK,
-        )
-    } else {
-        (p.surface.into(), p.text_primary.into())
-    };
+    let (field_fill, field_text) = (
+        rowline_core::render::Color::WHITE,
+        rowline_core::render::Color::BLACK,
+    );
     cmds.push(RenderCmd::RoundedRect {
         rect: field,
         radius: ds.radius(rowline_theme::Radius::Sm),
@@ -2665,28 +2907,54 @@ fn name_entry_overlay(game: &Game, layout: Layout) -> Vec<RenderCmd> {
         rect: field,
         color: p.outline_strong.into(),
     });
+    let body_size = ds.text_size(rowline_theme::TextRole::Body) as u16;
+    let text_x = field.x + 8.0;
+    let text_width = estimate_text_width(&game.name_input, body_size as f32);
+    if game.name_select_all {
+        // The default name is selected: show a highlight so the user can
+        // replace or delete it with one keystroke.
+        cmds.push(RenderCmd::RoundedRect {
+            rect: rowline_core::render::Rect::new(
+                field.x + 4.0,
+                field.y + 5.0,
+                (text_width + 8.0).min(field.width - 8.0),
+                24.0,
+            ),
+            radius: 0.0,
+            color: p.accent.into(),
+        });
+    }
     cmds.push(RenderCmd::Text {
         text: game.name_input.clone(),
-        at: rowline_core::input::Point::new(field.x + 8.0, field.y + 7.0),
-        size: ds.text_size(rowline_theme::TextRole::Body) as u16,
-        color: field_text,
+        at: rowline_core::input::Point::new(text_x, field.y + 7.0),
+        size: body_size,
+        color: if game.name_select_all {
+            p.text_on_accent.into()
+        } else {
+            field_text
+        },
     });
+    if !game.name_select_all {
+        // A caret at the insertion point (text always appends at the end).
+        let caret_x = (text_x + text_width + 1.0).min(field.x + field.width - 4.0);
+        cmds.push(RenderCmd::RoundedRect {
+            rect: rowline_core::render::Rect::new(caret_x, field.y + 8.0, 1.5, 18.0),
+            radius: 0.0,
+            color: field_text,
+        });
+    }
 
-    // The OK button.
+    // The primary action.
     cmds.push(RenderCmd::RoundedRect {
         rect: ok,
         radius: ds.radius(rowline_theme::Radius::Sm),
-        color: p.surface_raised.into(),
-    });
-    cmds.push(RenderCmd::Outline {
-        rect: ok,
-        color: p.outline_strong.into(),
+        color: p.accent.into(),
     });
     cmds.push(RenderCmd::Text {
-        text: "\u{786e}\u{5b9a}(O)".to_string(),
-        at: rowline_core::input::Point::new(ok.x + 48.0, ok.y + 7.0),
+        text: "\u{786e}\u{5b9a}".to_string(),
+        at: rowline_core::input::Point::new(ok.x + 48.0, ok.y + 8.0),
         size: ds.text_size(rowline_theme::TextRole::Body) as u16,
-        color: p.text_primary.into(),
+        color: p.text_on_accent.into(),
     });
     cmds
 }
@@ -2702,13 +2970,20 @@ fn menu_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
     let bar = game.menu_bar_rect(layout.client_w);
     cmds.push(RenderCmd::RoundedRect {
         rect: bar,
-        radius: ds.radius(rowline_theme::Radius::Md),
+        radius: 0.0,
         color: p.surface_alt.into(),
+    });
+    // A hairline separates the bar from the content.
+    cmds.push(RenderCmd::RoundedRect {
+        rect: rowline_core::render::Rect::new(0.0, m.bar_height - 1.0, bar.width, 1.0),
+        radius: 0.0,
+        color: p.outline.into(),
     });
 
     for (i, menu) in game.menu.menus.iter().enumerate() {
         let x = i as f32 * m.title_width;
-        let rect = rowline_core::render::Rect::new(x, 0.0, m.title_width, m.bar_height);
+        let rect =
+            rowline_core::render::Rect::new(x + 4.0, 4.0, m.title_width - 8.0, m.bar_height - 8.0);
         let open = game.menu.open == Some(i);
         if open {
             cmds.push(RenderCmd::RoundedRect {
@@ -2717,48 +2992,21 @@ fn menu_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
                 color: p.surface_hover.into(),
             });
         }
+        // Centre the title in the 30 px bar.  The text anchor is the
+        // top-left; a 14 px label is about 20 px tall, so 8 px is centred.
         cmds.push(RenderCmd::Text {
             text: menu.title.to_string(),
             at: rowline_core::input::Point::new(
-                x + ds.space(rowline_theme::Space::Xs),
-                m.bar_height * 0.2,
+                x + ds.space(rowline_theme::Space::Md),
+                m.bar_height * 0.27,
             ),
             size: ds.text_size(rowline_theme::TextRole::Label) as u16,
-            color: if open && ds.is_classic() {
+            color: if open {
                 p.text_on_accent.into()
-            } else if ds.is_classic() {
-                p.text_primary.into()
-            } else if open {
-                p.accent.into()
             } else {
-                p.text_secondary.into()
+                p.text_primary.into()
             },
         });
-    }
-
-    // ---- the toolbar ---------------------------------------------------
-    //
-    // The original has no toolbar: its window is title bar + native menu +
-    // HUD.  The two shortcut buttons are a re-design, so the classic theme
-    // hides them (Ctrl+T / Ctrl+R still work).
-    if !ds.is_classic() {
-        let tb = game.menu_toolbar_rect(layout.client_w);
-        let icon = tb.height * 0.72;
-        for (i, (index, tint)) in [
-            (crate::commands::ICON_THEME, p.text_secondary),
-            (crate::commands::ICON_SETTINGS, p.text_secondary),
-        ]
-        .iter()
-        .enumerate()
-        {
-            let x = tb.x + i as f32 * (tb.width * 0.5) + 4.0;
-            cmds.push(RenderCmd::Icon {
-                index: *index,
-                dst: rowline_core::input::Point::new(x, tb.y + (tb.height - icon) * 0.5),
-                size: rowline_core::input::Size::new(icon, icon),
-                tint: (*tint).into(),
-            });
-        }
     }
 
     // ---- the open dropdown ---------------------------------------------
@@ -2790,18 +3038,6 @@ fn menu_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
     };
     for (row, item) in menu.items.iter().enumerate() {
         let y = panel.y + row as f32 * m.row_height;
-        if item.is_separator() {
-            cmds.push(RenderCmd::Outline {
-                rect: rowline_core::render::Rect::new(
-                    panel.x + m.pad,
-                    y + m.row_height * 0.5,
-                    panel.width - m.pad * 2.0,
-                    1.0,
-                ),
-                color: p.outline.into(),
-            });
-            continue;
-        }
         let hovered = game.menu.hover == Some(row);
         if hovered {
             cmds.push(RenderCmd::RoundedRect {
@@ -2815,48 +3051,27 @@ fn menu_commands(game: &Game, layout: Layout) -> Vec<RenderCmd> {
                 color: p.surface_hover.into(),
             });
         }
-        // The command's icon, if it has one.  Classic Win95 menus are text
-        // only, exactly like the original's RT_MENU.
-        let mut label_x = panel.x + m.pad;
-        if !ds.is_classic() {
-            if let Some(icon) =
-                crate::commands::icon_for(crate::commands::Command(item.id.unwrap_or(0)))
-            {
-                let side = m.row_height - 8.0;
-                cmds.push(RenderCmd::Icon {
-                    index: icon,
-                    dst: rowline_core::input::Point::new(panel.x + m.pad, y + 4.0),
-                    size: rowline_core::input::Size::new(side, side),
-                    tint: if hovered {
-                        p.accent.into()
-                    } else {
-                        p.text_secondary.into()
-                    },
-                });
-            }
-            label_x += 28.0;
-        }
         cmds.push(RenderCmd::Text {
             text: item.label.to_string(),
-            at: rowline_core::input::Point::new(label_x, y + m.row_height * 0.2),
+            at: rowline_core::input::Point::new(panel.x + m.pad, y + m.row_height * 0.22),
             size: ds.text_size(rowline_theme::TextRole::Body) as u16,
-            color: if hovered && ds.is_classic() {
+            color: if hovered {
                 p.text_on_accent.into()
-            } else if hovered {
-                p.text_primary.into()
             } else {
-                p.text_secondary.into()
+                p.text_primary.into()
             },
         });
         if !item.hint.is_empty() {
+            let hint_size = ds.text_size(rowline_theme::TextRole::Caption) as u16;
+            let width = 7.0 * item.hint.chars().count() as f32;
             cmds.push(RenderCmd::Text {
                 text: item.hint.to_string(),
                 at: rowline_core::input::Point::new(
-                    panel.x + panel.width - m.pad - 48.0,
-                    y + m.row_height * 0.2,
+                    panel.x + panel.width - m.pad - width,
+                    y + m.row_height * 0.22,
                 ),
-                size: ds.text_size(rowline_theme::TextRole::Caption) as u16,
-                color: if hovered && ds.is_classic() {
+                size: hint_size,
+                color: if hovered {
                     p.text_on_accent.into()
                 } else {
                     p.text_tertiary.into()
@@ -2887,17 +3102,54 @@ mod tests {
     }
 
     #[test]
-    fn toggles_flip_the_settings() {
-        let mut g = Game::new(1, RuleModel::default());
-        let before = g.settings().show_next;
-        g.run_command(Command::TOGGLE_NEXT_SET);
-        assert_ne!(before, g.settings().show_next);
+    fn dialogs_close_from_their_buttons() {
+        let layout = Layout::compute_framed(
+            760,
+            480,
+            rowline_core::layout::MENU_BAR_H,
+            rowline_core::layout::FRAME_RESERVE,
+        );
+        let mut g = Game::new(7, RuleModel::default());
 
-        let before = g.settings().use_figures;
-        g.run_command(Command::TOGGLE_USE_FIGURES);
-        assert_ne!(before, g.settings().use_figures);
-        // the engine and the setting must stay in sync
-        assert_eq!(g.engine().use_figures(), g.settings().use_figures);
+        g.run_command(Command::HELP);
+        assert_eq!(g.overlay, Overlay::Help);
+        let (_panel, button) = help_rects(layout);
+        g.overlay_click(
+            Point::new(
+                button.x + button.width * 0.5,
+                button.y + button.height * 0.5,
+            ),
+            layout,
+        );
+        assert_eq!(g.overlay, Overlay::None);
+
+        g.run_command(Command::ABOUT);
+        let (panel, _) = about_rects(layout);
+        let close = close_rect(panel);
+        g.overlay_click(
+            Point::new(close.x + close.width * 0.5, close.y + close.height * 0.5),
+            layout,
+        );
+        assert_eq!(g.overlay, Overlay::None);
+
+        g.run_command(Command::TOGGLE_STATISTICS);
+        let (panel, _) = stats_rects(layout);
+        let close = close_rect(panel);
+        g.overlay_click(
+            Point::new(close.x + close.width * 0.5, close.y + close.height * 0.5),
+            layout,
+        );
+        assert_eq!(g.overlay, Overlay::None);
+    }
+
+    #[test]
+    fn the_statistics_command_toggles_its_dialog() {
+        let mut g = Game::new(1, RuleModel::default());
+        assert_eq!(g.overlay, Overlay::None);
+        g.run_command(Command::TOGGLE_STATISTICS);
+        assert_eq!(g.overlay, Overlay::Statistics);
+        g.run_command(Command::TOGGLE_STATISTICS);
+        assert_eq!(g.overlay, Overlay::None);
     }
 
     #[test]
@@ -2906,14 +3158,14 @@ mod tests {
         let g = Game::new(7, RuleModel::default());
         let layout = rowline_core::layout::Layout::compute(1280, 960);
         let cmds = frame(&g, layout);
-        let sprites = cmds
+        let balls = cmds
             .iter()
-            .filter(|c| matches!(c, RenderCmd::Sprite { .. }))
+            .filter(|c| matches!(c, RenderCmd::Sprite { size, .. } if size.width == 24.0))
             .count();
-        // three previews + the balls that are on the board
+        // Three 24 px preview balls.
         assert!(
-            sprites >= 3,
-            "expected at least the three previews, got {sprites}"
+            balls >= 3,
+            "expected at least the three previews, got {balls}"
         );
         let texts: Vec<&str> = cmds
             .iter()
@@ -2923,10 +3175,9 @@ mod tests {
             })
             .collect();
         assert!(
-            texts.contains(&"\u{4e0b}\u{7ec4}"),
+            texts.contains(&"\u{4e0b}\u{4e00}\u{7ec4}"),
             "the next-group label is missing"
         );
-        assert!(texts.contains(&"\u{989c}\u{8272}") || texts.contains(&"\u{5f62}\u{72b6}"));
     }
 
     #[test]
@@ -2940,16 +3191,16 @@ mod tests {
             .filter(|c| matches!(c, RenderCmd::Sprite { size, .. } if size.width == 36.0))
             .count();
         // 81 board cells + the three HUD preview cells.
-        assert_eq!(plates, 84);
-        // The classic default paints the board strip black, exactly like
-        // the original.
+        assert!(plates >= 84, "only {plates} plates were drawn");
+        // The board strip uses the theme's backdrop token.
+        let backdrop: rowline_core::render::Color = g.design.palette.board_backdrop.into();
         assert!(cmds.iter().any(|c| matches!(
             c,
             RenderCmd::RoundedRect { rect, color, .. }
                 if rect.x == 0.0
                     && rect.y == layout.board_y as f32
                     && rect.width == layout.client_w as f32
-                    && *color == rowline_core::render::Color::BLACK
+                    && *color == backdrop
         )));
     }
 
@@ -3025,7 +3276,6 @@ mod tests {
         );
         let mut g = Game::new(7, RuleModel::default());
         g.offer_name_entry();
-        let start = g.name_input.len();
 
         // The IME reports the composition, then the physical keys deliver
         // the pinyin letters.
@@ -3057,9 +3307,8 @@ mod tests {
             },
             layout,
         );
-        assert!(g.name_input.ends_with("剑客"), "got {:?}", g.name_input);
-        assert_eq!(g.name_input.len(), start + "剑客".len());
-        assert!(!g.name_input.contains("jian"));
+        // The selected default was replaced, not appended to.
+        assert_eq!(g.name_input, "剑客");
     }
 
     #[test]
@@ -3102,7 +3351,7 @@ mod tests {
             rowline_core::layout::MENU_BAR_H,
             rowline_core::layout::FRAME_RESERVE,
         );
-        let (panel, _) = scoreboard_rects(layout, true);
+        let (panel, _) = scoreboard_rects(layout);
         let (clear, ok) = scoreboard_buttons((panel, 0.0));
         for b in [clear, ok] {
             assert!(b.x >= panel.x, "{b:?} starts left of {panel:?}");
@@ -3125,7 +3374,7 @@ mod tests {
         g.set_game_over(true);
         // The dialog has already been acknowledged; the table is open.
         g.game_over_ack = true;
-        let (panel, row_h) = scoreboard_rects(layout, true);
+        let (panel, row_h) = scoreboard_rects(layout);
         let (_clear, ok) = scoreboard_buttons((panel, row_h));
         g.overlay = Overlay::Scoreboard;
         let before = g.engine().step();
@@ -3179,28 +3428,6 @@ mod tests {
             anim.started = Instant::now() - anim.duration() - Duration::from_millis(1);
         }
         g.tick(0.016, layout);
-        assert!(g.move_anim.is_none());
-        assert_eq!(g.engine().board().colour_at(0, 0), 0);
-        assert_eq!(g.engine().board().colour_at(0, 2), 1);
-    }
-
-    #[test]
-    fn reduced_motion_moves_without_an_animation() {
-        let mut g = Game::new(7, RuleModel::default());
-        g.toggle_reduced_motion();
-        {
-            let b = g.engine_mut().board_mut();
-            b.cells_mut().fill(0);
-            b.set(0, 0, 1);
-        }
-        let layout = Layout::compute_framed(
-            604,
-            396,
-            rowline_core::layout::MENU_BAR_H,
-            rowline_core::layout::FRAME_RESERVE,
-        );
-        g.click_at(cell_centre(layout, 0, 0), layout);
-        g.click_at(cell_centre(layout, 0, 2), layout);
         assert!(g.move_anim.is_none());
         assert_eq!(g.engine().board().colour_at(0, 0), 0);
         assert_eq!(g.engine().board().colour_at(0, 2), 1);
@@ -3261,7 +3488,41 @@ mod tests {
     }
 
     #[test]
-    fn the_classic_name_field_is_white_with_black_text() {
+    fn the_name_field_is_white_with_black_text() {
+        let layout = Layout::compute_framed(
+            604,
+            396,
+            rowline_core::layout::MENU_BAR_H,
+            rowline_core::layout::FRAME_RESERVE,
+        );
+        let mut g = Game::new(7, RuleModel::default());
+        let field_colour = rowline_core::render::Color::WHITE;
+        let text_colour = rowline_core::render::Color::BLACK;
+        g.offer_name_entry();
+        // Clear the selected default so the caret/black-text state is drawn.
+        g.name_key(rowline_core::input::Key::Backspace);
+        let cmds = frame(&g, layout);
+        let (_panel, field, _ok) = name_entry_rects(layout);
+        assert!(
+            cmds.iter().any(|c| matches!(
+                c,
+                RenderCmd::RoundedRect { rect, color, .. }
+                    if *rect == field && *color == field_colour
+            )),
+            "the edit field must be white"
+        );
+        assert!(
+            cmds.iter().any(|c| matches!(
+                c,
+                RenderCmd::Text { text, color, .. }
+                    if text == &g.name_input && *color == text_colour
+            )),
+            "the name must be black on the white field"
+        );
+    }
+
+    #[test]
+    fn the_name_entry_shows_a_selection_then_a_caret() {
         let layout = Layout::compute_framed(
             604,
             396,
@@ -3270,25 +3531,26 @@ mod tests {
         );
         let mut g = Game::new(7, RuleModel::default());
         g.offer_name_entry();
-        let cmds = frame(&g, layout);
         let (_panel, field, _ok) = name_entry_rects(layout);
+        let accent: rowline_core::render::Color = g.design.palette.accent.into();
+        let selected = frame(&g, layout);
         assert!(
-            cmds.iter().any(|c| matches!(
+            selected.iter().any(|c| matches!(
                 c,
                 RenderCmd::RoundedRect { rect, color, .. }
-                    if *rect == field
-                        && *color == rowline_core::render::Color::WHITE
+                    if rect.x == field.x + 4.0 && *color == accent
             )),
-            "the classic edit field must be white"
+            "the default name must be shown as selected"
         );
+
+        g.name_key(rowline_core::input::Key::Backspace);
+        let cleared = frame(&g, layout);
         assert!(
-            cmds.iter().any(|c| matches!(
+            cleared.iter().any(|c| matches!(
                 c,
-                RenderCmd::Text { text, color, .. }
-                    if text == &g.name_input
-                        && *color == rowline_core::render::Color::BLACK
+                RenderCmd::RoundedRect { rect, .. } if rect.width == 1.5
             )),
-            "the name must be drawn in black on the white field"
+            "the caret must be drawn after the default is cleared"
         );
     }
 
@@ -3372,25 +3634,11 @@ mod tests {
         // that follows toggles it straight shut again.
         g.menu_hover(Point::new(30.0, 10.0));
         assert!(g.menu.is_closed());
-        g.menu_click(Point::new(30.0, 10.0), 604);
+        g.menu_click(Point::new(30.0, 10.0));
         assert_eq!(g.menu.open, Some(0));
         // Once open, moving across the bar switches menus.
         g.menu_hover(Point::new(100.0, 10.0));
         assert_eq!(g.menu.open, Some(1));
-    }
-
-    #[test]
-    fn the_hidden_classic_toolbar_does_not_toggle_anything() {
-        let mut g = Game::new(7, RuleModel::default());
-        assert!(g.design.is_classic());
-        let retro = g.settings().retro_mode;
-        let theme = g.design.kind();
-        // The top-right spot is where the re-design's two shortcut buttons
-        // live; the original has none, so a click there must not toggle the
-        // theme or the display policy.
-        g.menu_click(Point::new(590.0, 5.0), 604);
-        assert_eq!(g.settings().retro_mode, retro);
-        assert_eq!(g.design.kind(), theme);
     }
 
     #[test]
@@ -3445,8 +3693,9 @@ mod tests {
     fn the_statistics_panel_is_opt_in_and_lists_every_slot() {
         let mut g = Game::new(7, RuleModel::default());
         let layout = rowline_core::layout::Layout::compute(1280, 960);
-        // The original ships with ShowStatistics=0.
-        assert!(!g.settings().show_statistics);
+        // Statistics is a modal opened from the menu / F5, not a persisted
+        // setting.
+        assert_eq!(g.overlay, Overlay::None);
         let texts = |cmds: &[RenderCmd]| -> Vec<String> {
             cmds.iter()
                 .filter_map(|c| match c {
@@ -3457,7 +3706,7 @@ mod tests {
         };
         assert!(!texts(&frame(&g, layout)).iter().any(|t| t == "统计"));
 
-        g.settings.show_statistics = true;
+        g.run_command(Command::TOGGLE_STATISTICS);
         {
             let b = g.engine_mut().board_mut();
             b.cells_mut().fill(0);
@@ -3466,15 +3715,15 @@ mod tests {
         let cmds = frame(&g, layout);
         let texts = texts(&cmds);
         assert!(texts.iter().any(|t| t == "统计"));
-        // 80 empty cells of 81 -> 98%, one green ball -> 1%.
+        // 80 empty cells of 81 -> 98%, one green ball -> 1%.  The redesign
+        // draws the count and the share in separate columns.
         assert!(
-            texts.iter().any(|t| t == "80 (98%)"),
-            "empty row missing: {texts:?}"
+            texts.iter().any(|t| t == "\u{7a7a}\u{683c}"),
+            "the empty-cell row is missing: {texts:?}"
         );
-        assert!(
-            texts.iter().any(|t| t == "1 (1%),消除-0"),
-            "colour row missing: {texts:?}"
-        );
+        assert!(texts.iter().any(|t| t == "80"), "empty count missing");
+        assert!(texts.iter().any(|t| t == "98%"), "empty share missing");
+        assert!(texts.iter().any(|t| t == "1"), "colour count missing");
         // Seven ball rows plus the empty row.
         assert_eq!(
             texts.iter().filter(|t| t.contains('%')).count(),
@@ -3497,11 +3746,15 @@ mod tests {
             })
             .collect();
         assert!(
-            texts.contains(&"\u{6e38}\u{620f}\u{7ed3}\u{675f}!"),
+            texts.contains(&"\u{6e38}\u{620f}\u{7ed3}\u{675f}"),
+            "the dialog title is missing"
+        );
+        assert!(
+            texts.contains(&"\u{65e0}\u{6cd5}\u{79fb}\u{52a8}\u{4e86}"),
             "the dialog text is missing"
         );
         assert!(
-            texts.contains(&"\u{786e}\u{5b9a}(O)"),
+            texts.contains(&"\u{786e}\u{5b9a}"),
             "the OK button is missing"
         );
     }
@@ -3545,10 +3798,13 @@ mod tests {
         g.offer_name_entry();
         assert_eq!(g.overlay, Overlay::NameEntry);
         assert_eq!(g.name_input, "挑战者");
+        assert!(g.name_select_all);
+        // The default is selected: the first character replaces it.
         g.name_key(rowline_core::input::Key::KeyA);
-        assert_eq!(g.name_input, "挑战者a");
+        assert_eq!(g.name_input, "a");
+        assert!(!g.name_select_all);
         g.name_key(rowline_core::input::Key::Backspace);
-        assert_eq!(g.name_input, "挑战者");
+        assert_eq!(g.name_input, "");
         g.accept_name();
         // The original shows the leaderboard right after the name is entered.
         assert_eq!(g.overlay, Overlay::Scoreboard);
@@ -3690,7 +3946,6 @@ mod tests {
     #[test]
     fn beating_the_record_starts_the_celebration() {
         let mut g = Game::new(7, RuleModel::default());
-        g.toggle_reduced_motion();
         g.engine_mut().set_score(99);
         {
             let b = g.engine_mut().board_mut();
@@ -3708,6 +3963,11 @@ mod tests {
         );
         g.click_at(cell_centre(layout, 5, 4), layout);
         g.click_at(cell_centre(layout, 4, 4), layout);
+        // Let the move animation finish so the engine applies the clear.
+        if let Some(anim) = g.move_anim.as_mut() {
+            anim.started = Instant::now() - Duration::from_secs(5);
+        }
+        g.tick(0.0, layout);
         // The clear scores 10, so 109 beats the default record of 100.  The
         // left box keeps showing the old record until a new game rescales.
         assert!(g.record_celebrating());

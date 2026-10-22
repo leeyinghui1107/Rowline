@@ -1,0 +1,15 @@
+WenQuanYi Micro Hei (wqy-microhei.ttc)
+Version 0.2.0-beta
+
+Digitized data copyright (C) 2007 Google Corporation.
+Copyright (C) 2008-2009 WenQuanYi Board of Trustees and Qianqian Fang.
+
+Licensed under the Apache License, Version 2.0 (see
+LICENSE-APACHE-2.0.txt).  The font's name table carries the same
+declaration (name ID 13: "Licensed under the Apache License, Version 2.0").
+
+Source: https://github.com/anthonyfok/fonts-wqy-microhei
+
+The font is embedded in the executable so that Rowline ships as a single
+self-contained file and does not depend on an installed CJK font.  It
+covers Latin, punctuation and CJK, i.e. every glyph the UI needs.

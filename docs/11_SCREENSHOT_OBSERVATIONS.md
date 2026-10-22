@@ -272,7 +272,7 @@ percent = count * 100 / 81        # 整除；81 是硬编码的棋盘格数
 
 **实现**：`Engine::colour_counts` / `cleared_counts` 保存同样的统计，
 `app::game::stats_panel` 绘制同构面板；菜单 513 / F5 切换
-`settings.show_statistics`（默认 `false`）。
+`Overlay::Statistics`（重设计后为居中模态卡片，不再持久化）。
 
 ---
 
@@ -339,9 +339,8 @@ Windows 11 200% 缩放、本机窗口边框下客户区正好是 **604×371**—
 | `下组` / `颜色` | **#808080** |
 | 7 色球 | `#00A000` `#0000C0` `#00C0C0` `#C000C0` `#C00000` `#C0C000` `#800000` |
 
-**实现**：新增 `ThemeKind::Classic` 并设为默认；`DesignSystem::radius()`
-在经典主题下全部返回 0，格子改用带 Win95 立体边的图集底板，菜单不再画
-重设计工具栏。`Ctrl+T` 仍可切到 Dark / Light（这两套是可选的重设计外观）。
+**实现**：这一段描述的是早期为了对齐原版而加入的 Classic 主题。最终版本
+最终只保留 Classic 主题，`ThemeKind` 与主题切换分支均已删除。
 
 ### 角色、标签与边框（本轮按 200% 截图逐像素测量）
 
@@ -405,12 +404,12 @@ logical = (physical - content_rect.origin) / content_scale
 | 13 | **棋盘/角色按原公式定位**（`x=(W-328)/2`，`y=(H-376)/2+46`） | `core::layout::Layout` | ✅ 已做（含 C 对照实现，604×371 实机校验） |
 | 14 | **两个角色分列棋盘两侧** | `Layout::left_figure_x` / `right_figure_x` | ✅ 纹章 + 底座已画 |
 | 15 | HUD **左框 = 国王**、**右框 = 挑战者**，榜单默认含 `国王 100` | `Game::king_score` / `challenger_score`、`scoreboard::default_table` | ✅ 已做 |
-| 16 | **统计窗口**（8 行：空格子 + 7 色，`count (percent%)`，球色行加 `,消除-N`） | `Engine::colour_counts` / `cleared_counts`、`app::game::stats_panel` | ✅ 已做（默认关闭） |
-| 17 | **经典主题设为默认**（#F0F0F0 UI / 黑棋盘 / #C0C0C0 格子 / 原作 7 色） | `theme::ThemeKind::Classic` | ✅ 已做 |
-| 17a | **默认客户区 604×396**（372 内容 + 20 自绘菜单 + 4 底部边框预留），位置/尺寸随存档恢复 | `Settings::default` / `core::layout` / `app::main` | ✅ 已做 |
+| 16 | **统计卡片**（8 行：空格子 + 7 色，数量 / 占比 / 已消除，居中模态） | `Engine::colour_counts` / `cleared_counts`、`app::game::stats_panel` | ✅ 已做（重设计：不再与棋盘重叠） |
+| 17 | **唯一主题 = 原作 Classic**（#F0F0F0 UI、黑棋盘、#C0C0C0 立体格、原作精灵球） | `theme::Palette::CLASSIC` | ✅ 已做（主题切换已移除） |
+| 17a | **默认客户区 760×480**（26 px 紧凑菜单 + 内容），位置/尺寸随存档恢复 | `Settings::default` / `core::layout` / `app::main` | ✅ 已做 |
 | 17b | **HiDPI 输入反算**（物理坐标 → 内容逻辑坐标） | `GpuApp::to_game` | ✅ 已做（200% 实机验证） |
-| 17c | **棋盘/预览格底板改用图集精灵**，带原版立体边 | `core::view::build_frame` | ✅ 已做 |
-| 18 | **`固定分辨率` 菜单项**（与 `Ctrl+R` 等价的重设计扩展，id 515） | `core::menu` / `app::commands` / `app::game` | ✅ 已做 |
+| 17c | **图集立体格 + 精灵球** | `core::view::build_frame` | ✅ 已做 |
+| 18 | ~~`固定分辨率` 菜单项~~ | — | ✅ 按重设计要求移除 |
 | 19 | **@4x 素材**（精灵表与图标） | `tools/make_sheet.py` / `tools/make_icons.py` | ✅ 已生成 |
 | 20 | **消除动画**：2 × 50 ms 溶解 + 420 ms 胜利立绘 | `app::game::{clear_animation_commands, win_lift}` | ✅ 已做（时序来自 clear5 连拍） |
 | 21 | **棋盘悬停环 + 选中后的最短路预览** | `Game::update_hover` / `hover_commands` | ✅ 已做（重设计增强） |
@@ -421,7 +420,7 @@ logical = (physical - content_rect.origin) / content_scale
 | 26 | **拼音不进入姓名**：`Ime::Preedit` 记起点，提交时截断 | `Game::ime_start` | ✅ 已做（回归测试） |
 | 27 | **排行榜按钮在面板内**；确定后开始新局 | `scoreboard_buttons` / `start_new_game` | ✅ 已做（回归测试） |
 | 28 | **窗口与棋盘凸起边框** | `client_frame_commands` / `core::view` | ✅ 已做 |
-| 29 | **自制卡通国王 / 挑战者**：圆身、表情、眨眼、待机浮动、胜利跳、权杖 / 剑 | `app::game::one_figure` | ✅ 已做（原创美术，不使用原作像素） |
+| 29 | **自制卡通国王 / 挑战者**：圆身、渐变光影、表情、眨眼、待机浮动、胜利跳；国王戴冠持权杖，挑战者留深色短发、持剑（**不戴王冠/头带**）；金属台阶带高光、阴影与地面反光 | `app::game::one_figure` | ✅ 已做（原创美术，不使用原作像素） |
 | 30 | **原版 vs 复刻对比图** | `tools/win/compare_shots.ps1` → `build/compare_original_vs_rowline.png` | ✅ 已生成 |
 | 31 | **棋盘下边框**：格底板阴影 + 2 px 黑，覆盖窗口浮雕边（原版如此） | `app::game::board_bottom_edge` | ✅ 已做（像素核对） |
 | 32 | **总榜列对齐**：名次/姓名固定左列，分数右对齐单独绘制 | `app::game::scoreboard_overlay` | ✅ 已做（混排中英文不再错位） |
@@ -429,7 +428,7 @@ logical = (physical - content_rect.origin) / content_scale
 | 34 | **对比度**：`下组/颜色` 与总榜空行改为 `#606060`（AA 5.2:1），隔行 `#E4E4E4`，角色加深并加圆角描边 | `theme::Palette::CLASSIC` / `one_figure` | ✅ 已做 |
 | 35 | **发布版无控制台**：`windows_subsystem = "windows"`（release），诊断输出改为不 panic 的 `note!` | `app::main` / `render::canvas` | ✅ 已做（PE Subsystem=GUI，实测无 conhost） |
 | 36 | **棋盘结束在窗口下边框之上**：布局预留 4 px，默认客户区 604×396 | `core::layout::{FRAME_RESERVE, compute_framed}` | ✅ 已做（像素核对：棋盘底 390，边框 393–395） |
-| 37 | **单文件发布 + 体积**：7.32 MB → **2.93 MB**，素材内嵌、无外部目录；`opt-level="z"` + fat LTO + strip + 按平台裁剪后端 + 自写文本存档（去掉 serde/ron） | `embedded_*` / `Cargo.toml` / `package.py` | ✅ 已做（空目录只放 exe 实测可运行） |
+| 37 | **单文件发布 + 体积**：7.32 MB → **2.93 MB**，素材内嵌、无外部目录；后为彻底摆脱系统字体依赖内嵌了 5.2 MB 中文字体，当前约 **7.2 MB**；`opt-level="z"` + fat LTO + strip + 按平台裁剪后端 + 自写文本存档（去掉 serde/ron） | `embedded_*` / `Cargo.toml` / `package.py` | ✅ 已做（空目录只放 exe 实测可运行；macOS 打包为 `Rowline.app`，`open` 后父进程为 launchd，无 Terminal 窗口） |
 | 38 | **角色高度 = 分数（同一比例尺）**：`height(score) = score / (1.5 × 记录) × 150 px`；两侧同分同高 | `score_to_height` | ✅ 已做（回归测试） |
 | 39 | **破纪录过程中**：左侧记录分与国王高度保持不变，只有右侧挑战者的分数与高度继续增长，最高到 150% | `Game::king_score` / `update_figure_targets` | ✅ 已做（`--scenario record`） |
 | 40 | **新纪录重算比例**：新局开始时按新记录重算；国王先从当前高度降到 0、再升到新比例高度（450 + 550 ms，制造“增长”观感），挑战者同时从当前高度回落到 0；左侧计分同步 0 → 新记录 | `ScaleReset` / `displayed_king_score` | ✅ 已做（回归测试 + `--scenario afterrecord`） |

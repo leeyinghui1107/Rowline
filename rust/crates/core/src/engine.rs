@@ -41,7 +41,6 @@ pub struct MoveResult {
 pub struct Engine {
     board: Board,
     score: i64,
-    use_figures: bool,
     rng: Lcg,
     model: RuleModel,
     step: u32,
@@ -62,7 +61,6 @@ impl Engine {
         Engine {
             board: Board::new(),
             score: 0,
-            use_figures: false,
             rng: Lcg::with_seed(seed),
             model,
             step: 0,
@@ -94,24 +92,14 @@ impl Engine {
         self.score = score;
     }
 
-    /// Whether the polygon sprite set is in use.
-    pub fn use_figures(&self) -> bool {
-        self.use_figures
+    /// Advance the step counter (the replay tool calls this after each op).
+    pub fn bump(&mut self) {
+        self.step += 1;
     }
 
     /// The current step counter.
     pub fn step(&self) -> u32 {
         self.step
-    }
-
-    /// Advance the step counter.
-    pub fn bump(&mut self) {
-        self.step += 1;
-    }
-
-    /// Toggle the polygon sprite set.
-    pub fn set_use_figures(&mut self, v: bool) {
-        self.use_figures = v;
     }
 
     /// `true` when at least one move is still possible.

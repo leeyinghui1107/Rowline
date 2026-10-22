@@ -12,14 +12,5 @@ rowline-core.workspace = true
 
 [features]
 default = []
-# Real windowing via winit.  Off by default so the workspace stays
-# dependency-light for CI, head-less replay and documentation builds.
-winit = ["dep:winit"]
 # Use a real on-disk file system instead of the in-memory stub.
 fs = []
-
-[dependencies.winit]
-version = "0.30"
-optional = true
-default-features = false
-features = ["rwh_06", "x11", "wayland", "wayland-dlopen"]

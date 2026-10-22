@@ -13,8 +13,8 @@
 /// One entry in a dropdown.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MenuItem {
-    /// The command id, or `None` for a separator.
-    pub id: Option<u16>,
+    /// The command id.
+    pub id: u16,
     /// The label.
     pub label: &'static str,
     /// The accelerator hint shown on the right.
@@ -24,25 +24,7 @@ pub struct MenuItem {
 impl MenuItem {
     /// A command item.
     pub const fn item(id: u16, label: &'static str, hint: &'static str) -> MenuItem {
-        MenuItem {
-            id: Some(id),
-            label,
-            hint,
-        }
-    }
-
-    /// A separator.
-    pub const fn separator() -> MenuItem {
-        MenuItem {
-            id: None,
-            label: "",
-            hint: "",
-        }
-    }
-
-    /// `true` when this is a separator.
-    pub const fn is_separator(&self) -> bool {
-        self.id.is_none()
+        MenuItem { id, label, hint }
     }
 }
 
@@ -73,12 +55,12 @@ pub struct MenuMetrics {
 impl Default for MenuMetrics {
     fn default() -> Self {
         MenuMetrics {
-            // The original uses a native Win32 menu: ~20 logical pixels tall,
-            // with 12 px labels.
-            bar_height: 20.0,
-            row_height: 20.0,
-            row_width: 160.0,
-            title_width: 56.0,
+            // A compact menu: 26 px bar and rows, matching the density of a
+            // desktop menu bar.
+            bar_height: 26.0,
+            row_height: 26.0,
+            row_width: 200.0,
+            title_width: 88.0,
             pad: 6.0,
         }
     }
@@ -137,18 +119,14 @@ impl MenuModel {
         }
     }
 
-    /// The first selectable row of a dropdown.
+    /// The first row of a dropdown.
     pub fn first_selectable(&self, menu: usize) -> Option<usize> {
-        self.menus
-            .get(menu)?
-            .items
-            .iter()
-            .position(|i| !i.is_separator())
+        (!self.menus.get(menu)?.items.is_empty()).then_some(0)
     }
 
     /// The row under the pointer, given the pointer's position relative to the
     /// dropdown panel.
-    pub fn hover_at(&mut self, panel_x: f32, panel_y: f32) {
+    pub fn hover_at(&mut self, panel_y: f32) {
         let Some(menu) = self.open else { return };
         let Some(m) = self.menus.get(menu) else {
             return;
@@ -159,15 +137,10 @@ impl MenuModel {
             return;
         }
         let idx = row as usize;
-        self.hover = if m.items[idx].is_separator() {
-            None
-        } else {
-            Some(idx)
-        };
-        let _ = panel_x;
+        self.hover = Some(idx);
     }
 
-    /// Move the hover by `delta` rows, skipping separators.
+    /// Move the hover by `delta` rows, wrapping around.
     pub fn move_hover(&mut self, delta: i32) {
         let Some(menu) = self.open else { return };
         let Some(m) = self.menus.get(menu) else {
@@ -177,13 +150,7 @@ impl MenuModel {
             return;
         }
         let n = m.items.len() as i32;
-        let mut idx = self.hover.unwrap_or(0) as i32;
-        for _ in 0..n {
-            idx = (idx + delta).rem_euclid(n);
-            if !m.items[idx as usize].is_separator() {
-                break;
-            }
-        }
+        let idx = (self.hover.unwrap_or(0) as i32 + delta).rem_euclid(n);
         self.hover = Some(idx as usize);
     }
 
@@ -203,7 +170,7 @@ impl MenuModel {
     pub fn hovered_command(&self) -> Option<u16> {
         let menu = self.open?;
         let row = self.hover?;
-        self.menus.get(menu)?.items.get(row)?.id
+        Some(self.menus.get(menu)?.items.get(row)?.id)
     }
 
     /// Activate the hovered command and close the menu.
@@ -214,43 +181,32 @@ impl MenuModel {
     }
 
     /// The command under the pointer, activating it.
-    pub fn click(&mut self, panel_x: f32, panel_y: f32) -> Option<u16> {
-        self.hover_at(panel_x, panel_y);
+    pub fn click(&mut self, panel_y: f32) -> Option<u16> {
+        self.hover_at(panel_y);
         self.activate()
     }
 }
 
-/// The default menu tree, mirroring the original's command ids.
+/// The menu tree of the final redesign.
+///
+/// Two compact menus, no separator rows: the game commands and the
+/// statistics toggle live in `文件`, and the help entries in `帮助`.
 pub fn default_menus() -> Vec<Menu> {
     vec![
         Menu {
-            // The strings are the original's, as parsed from its RT_MENU
-            // resource (analysis/menu_tree.txt): the interface is
-            // Simplified Chinese.
-            // The accelerator is part of the original title.
-            title: "\u{6587}\u{4ef6}(F)",
+            title: "文件(F)",
             items: vec![
-                MenuItem::item(256, "\u{65b0}\u{5efa}", "F4"),
-                MenuItem::separator(),
-                MenuItem::item(257, "\u{663e}\u{793a}\u{9ad8}\u{5206}\u{699c}", ""),
-                MenuItem::separator(),
-                MenuItem::item(258, "\u{9000}\u{51fa}", "Alt+F9"),
+                MenuItem::item(256, "新游戏", "F4"),
+                MenuItem::item(257, "高分榜", "H"),
+                MenuItem::item(513, "显示统计", "F5"),
+                MenuItem::item(258, "退出", "Alt+F9"),
             ],
         },
         Menu {
-            title: "\u{9009}\u{9879}(O)",
+            title: "帮助(H)",
             items: vec![
-                MenuItem::item(512, "\u{4e0b}\u{4e00}\u{7ec4}", "F3"),
-                MenuItem::item(513, "\u{663e}\u{793a}\u{7edf}\u{8ba1}", "F5"),
-                MenuItem::item(514, "\u{4f7f}\u{7528}\u{5f62}\u{72b6}", "F6"),
-                // Re-implementation extension: the original only exposes
-                // this through the `Ctrl+R` display policy, never as a menu
-                // command.  Id 515 is outside the original's nine ids.
-                MenuItem::item(515, "\u{56fa}\u{5b9a}\u{5206}\u{8fa8}\u{7387}", "Ctrl+R"),
-                MenuItem::separator(),
-                MenuItem::item(16528, "\u{5e2e}\u{52a9}", ""),
-                MenuItem::item(768, "\u{5185}\u{5bb9}", "F1"),
-                MenuItem::item(769, "\u{5173}\u{4e8e}", ""),
+                MenuItem::item(16528, "帮助主题", "F1"),
+                MenuItem::item(769, "关于 Rowline", ""),
             ],
         },
     ]
@@ -265,16 +221,20 @@ mod tests {
     }
 
     #[test]
-    fn the_command_ids_match_the_original() {
+    fn the_menu_ids_match_the_redesign() {
         let m = model();
         let ids: Vec<u16> = m
             .menus
             .iter()
-            .flat_map(|x| x.items.iter().filter_map(|i| i.id))
+            .flat_map(|x| x.items.iter().map(|i| i.id))
             .collect();
-        for expected in [256u16, 257, 258, 512, 513, 514, 515, 16528, 768, 769] {
+        for expected in [256u16, 257, 513, 258, 16528, 769] {
             assert!(ids.contains(&expected), "missing command {expected}");
         }
+        for removed in [512u16, 514, 515, 516, 517, 518, 768] {
+            assert!(!ids.contains(&removed), "command {removed} should be gone");
+        }
+        assert_eq!(m.menus.len(), 2);
     }
 
     #[test]
@@ -291,17 +251,19 @@ mod tests {
     fn opening_focuses_a_real_item() {
         let mut m = model();
         m.toggle(0);
-        // The first row of "File" is "New", not a separator.
+        // The first row of "File" is "New".
         assert_eq!(m.hover, Some(0));
         assert_eq!(m.hovered_command(), Some(256));
     }
 
     #[test]
-    fn the_hover_skips_separators() {
+    fn the_hover_moves_through_every_item() {
         let mut m = model();
         m.toggle(0);
-        m.move_hover(1); // -> row 1 is a separator, so it lands on row 2
+        m.move_hover(1);
         assert_eq!(m.hovered_command(), Some(257));
+        m.move_hover(1);
+        assert_eq!(m.hovered_command(), Some(513));
         m.move_hover(1);
         assert_eq!(m.hovered_command(), Some(258));
     }
@@ -319,18 +281,10 @@ mod tests {
         let mut m = model();
         m.toggle(0);
         let row_h = m.metrics.row_height;
-        // Row 2 is "High Scores" (id 257).
-        let cmd = m.click(10.0, row_h * 2.0 + 1.0);
-        assert_eq!(cmd, Some(257));
+        // Row 2 is "显示统计" (id 513).
+        let cmd = m.click(row_h * 2.0 + 1.0);
+        assert_eq!(cmd, Some(513));
         assert!(m.is_closed());
-    }
-
-    #[test]
-    fn clicking_a_separator_activates_nothing() {
-        let mut m = model();
-        m.toggle(0);
-        let row_h = m.metrics.row_height;
-        assert_eq!(m.click(10.0, row_h * 1.0 + 1.0), None);
     }
 
     #[test]

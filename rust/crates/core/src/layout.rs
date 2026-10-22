@@ -51,7 +51,7 @@ pub const HUD_H: i32 = 44;
 /// area.  Rowline draws the menu itself, so the window's client area is
 /// `HUD_H + board` tall **plus** this strip; the game layout is computed for
 /// the area below it (`Layout::compute_with_top`).
-pub const MENU_BAR_H: i32 = 20;
+pub const MENU_BAR_H: i32 = 26;
 /// Rows kept free at the bottom of the client for the raised window frame
 /// (1 px gap + 2 px bevel + 1 px spare), so the board ends **above** the
 /// frame instead of covering it.
@@ -97,8 +97,6 @@ pub struct Layout {
     pub panel_y: i32,
     pub panel_w: i32,
     pub panel_h: i32,
-    /// The board area width, as the original computes it.
-    pub board_area_w: i32,
     pub cell_px: i32,
 }
 
@@ -139,7 +137,6 @@ impl Layout {
             panel_y: figure_y,
             panel_w: PANEL_W,
             panel_h: FIGURE_H,
-            board_area_w: client_w - 96,
             cell_px: CELL_PX,
         }
     }
@@ -149,16 +146,6 @@ impl Layout {
         let mut l = Layout::raw(client_w, client_h);
         l.clamp();
         l
-    }
-
-    /// Compute the layout for the game content below a drawn menu strip.
-    ///
-    /// `client_h` is the whole window client area; `top` is the height of the
-    /// menu strip.  The original's formulas are applied to the **remaining**
-    /// height, then every region is shifted down by `top` so that drawing and
-    /// hit-testing use window coordinates throughout.
-    pub fn compute_with_top(client_w: i32, client_h: i32, top: i32) -> Layout {
-        Self::compute_framed(client_w, client_h, top, 0)
     }
 
     /// Compute the layout for content between a menu strip and the window's
@@ -230,22 +217,6 @@ impl Layout {
         }
         Some((r, c))
     }
-
-    /// `true` when the point is inside the left figure's slot.
-    pub fn in_left_figure(&self, px: i32, py: i32) -> bool {
-        px >= self.left_figure_x
-            && px < self.left_figure_x + FIGURE_W
-            && py >= self.figure_y
-            && py < self.figure_y + FIGURE_H
-    }
-
-    /// `true` when the point is inside the right figure's slot.
-    pub fn in_right_figure(&self, px: i32, py: i32) -> bool {
-        px >= self.right_figure_x
-            && px < self.right_figure_x + FIGURE_W
-            && py >= self.figure_y
-            && py < self.figure_y + FIGURE_H
-    }
 }
 
 /// The smallest client size in which every region fits without clamping.
@@ -286,13 +257,6 @@ fn fits(w: i32, h: i32) -> bool {
     fits_axis(w, true) && fits_axis(h, false)
 }
 
-/// `true` when the board fits inside the (unclamped) client area.
-pub fn board_fits(w: i32, h: i32) -> bool {
-    let board_x = (w - BOARD_SPAN_W) / 2;
-    let board_y = (h - BOARD_V_BIAS) / 2 + BOARD_V_OFFSET;
-    board_x >= 0 && board_y >= 0 && board_x + BOARD_FRAME_W <= w && board_y + BOARD_FRAME_H <= h
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -329,7 +293,7 @@ mod tests {
 
     #[test]
     fn the_board_ends_above_the_window_frame() {
-        for (w, h) in [(604, 396), (800, 620), (1920, 1080)] {
+        for (w, h) in [(604, 406), (800, 620), (1920, 1080)] {
             let l = Layout::compute_framed(w, h, MENU_BAR_H, FRAME_RESERVE);
             assert!(
                 l.board_y + BOARD_FRAME_H <= h - FRAME_RESERVE,

@@ -33,6 +33,7 @@ PY      := powershell -NoProfile -ExecutionPolicy Bypass -File tools/win/py.ps1
 CARGO   := powershell -NoProfile -ExecutionPolicy Bypass -File tools/win/cargo.ps1
 DIST    := powershell -NoProfile -ExecutionPolicy Bypass -File tools/build_all.ps1 --mode local
 DIST_CI := powershell -NoProfile -ExecutionPolicy Bypass -File tools/build_all.ps1 --mode ci
+CROSS   := $(PY) tools/build_cross.py
 else
 EXE     :=
 PYTHON  ?= python3
@@ -40,6 +41,7 @@ PY      := "$(PYTHON)"
 CARGO   := cargo
 DIST    := "$(PYTHON)" tools/build_all.py
 DIST_CI := "$(PYTHON)" tools/build_all.py --mode ci
+CROSS   := "$(PYTHON)" tools/build_cross.py
 endif
 
 # ------------------------------------------------------------------ replay
@@ -76,7 +78,7 @@ endif
 SDL_CFLAGS ?= $(shell sdl2-config --cflags 2>/dev/null)
 SDL_LIBS   ?= $(shell sdl2-config --libs 2>/dev/null || echo -lSDL2)
 
-.PHONY: all replay app check layout-check rust rust-test sheet icons package dist dist-ci shot test clean
+.PHONY: all replay app check layout-check rust rust-test rust-replay sheet icons package dist dist-ci cross shot test clean
 
 all: replay check
 
@@ -99,11 +101,22 @@ layout-check: $(CHECK_BIN)
 # it is not the product.
 
 # ------------------------------------------------------------------ rust
+#
+# Always pass --manifest-path instead of `cd $(RUST_DIR) && ...`.  On Windows
+# `$(CARGO)` is `powershell ... -File tools/win/cargo.ps1`, a *relative* path:
+# after a `cd rust` PowerShell would look for `rust/tools/win/cargo.ps1` and
+# fail.  --manifest-path keeps the working directory at the repository root,
+# so the wrapper resolves on every platform.
 rust:
-	cd $(RUST_DIR) && $(CARGO) build --release
+	$(CARGO) build --release --manifest-path $(RUST_DIR)/Cargo.toml
 
 rust-test:
-	cd $(RUST_DIR) && $(CARGO) test --release
+	$(CARGO) test --release --manifest-path $(RUST_DIR)/Cargo.toml
+
+# Refresh an existing replay binary before the differential gate: trusting a
+# stale binary made `make test` report a false divergence.
+rust-replay:
+	$(CARGO) build --release -p rowline-tools --manifest-path $(RUST_DIR)/Cargo.toml
 
 app: $(APP_BIN)
 
@@ -111,7 +124,7 @@ $(APP_BIN): $(APP_SRC) $(SRC)/wl_model.h $(SRC)/wl_layout.h $(SRC)/wl_render.h |
 	$(CC) $(CFLAGS) -I$(SRC) $(SDL_CFLAGS) -o $@ $(APP_SRC) $(SDL_LIBS)
 
 $(SHOT_BIN):
-	cd $(RUST_DIR) && $(CARGO) build --release -p rowline-tools
+	$(CARGO) build --release -p rowline-tools --manifest-path $(RUST_DIR)/Cargo.toml
 
 $(BUILD):
 	$(PY) -c "import os; os.makedirs(r'$(BUILD)', exist_ok=True)"
@@ -137,16 +150,20 @@ dist:
 dist-ci:
 	$(DIST_CI)
 
+# Build all three single-file downloads locally (macOS host only).
+cross:
+	$(CROSS)
+
 # Render a frame into a PNG without a GPU or a display.
 shot: $(SHOT_BIN)
 	$(SHOT_BIN) --out $(BUILD)/shot.png --width 1280 --height 900
 	@echo "wrote $(BUILD)/shot.png"
 
-test: $(REPLAY_BIN) $(CHECK_BIN)
+test: $(REPLAY_BIN) $(CHECK_BIN) $(if $(RUST_GATE),rust-replay)
 	$(CHECK_BIN)
 	@echo "$(if $(RUST_GATE),--- four-way differential gate (python / c / rust / golden) ---,--- rust not built; run 'make rust' for the four-way gate ---)"
 	$(PY) tools/replay/diff_replay.py --all
 
 clean:
 	$(PY) -c "import shutil; shutil.rmtree(r'$(BUILD)', ignore_errors=True)"
-	cd $(RUST_DIR) && $(CARGO) clean
+	$(CARGO) clean --manifest-path $(RUST_DIR)/Cargo.toml

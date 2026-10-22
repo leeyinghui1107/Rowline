@@ -5,7 +5,6 @@
 //! no consumer can accidentally mutate the model.
 
 use crate::board::{coords, Board, BOARD_SIDE};
-use crate::engine::Engine;
 use crate::layout::Layout;
 
 /// The coarse phase of a game.
@@ -36,12 +35,6 @@ pub struct GameState {
     pub selected: Option<usize>,
     /// The path currently being previewed or animated.
     pub path: Vec<usize>,
-    /// Whether the "next set" preview is visible.
-    pub show_next: bool,
-    /// Whether the statistics readout is visible.
-    pub show_statistics: bool,
-    /// Whether the polygon sprite set is in use.
-    pub use_figures: bool,
     /// The balls the game is about to place (the "next group").
     ///
     /// The original previews three of them (docs/11 section 2.1).
@@ -57,29 +50,6 @@ pub struct GameState {
 }
 
 impl GameState {
-    /// Build a snapshot from the engine and the current layout.
-    pub fn from_engine(engine: &Engine, layout: Layout) -> GameState {
-        let phase = if engine.board().is_full() {
-            Phase::GameOver
-        } else {
-            Phase::Ready
-        };
-        GameState {
-            phase,
-            score: engine.score(),
-            best_score: 0,
-            board: engine.board().clone(),
-            selected: None,
-            path: Vec::new(),
-            show_next: true,
-            show_statistics: true,
-            use_figures: engine.use_figures(),
-            next_group: engine.next_group(),
-            sheet_scale: 1,
-            layout,
-        }
-    }
-
     /// The colour of the cell at `(row, col)`, `0` when empty.
     pub fn colour_at(&self, row: usize, col: usize) -> u8 {
         self.board.colour_at(row, col)

@@ -1,7 +1,7 @@
 # 06 · 实施状态
 
 > 对照 `docs/04_FIDELITY_MATRIX.md` 的 M1–M6 里程碑。
-> 最近一次全量验证：**Rust 166 项测试通过 · 零编译警告 · clippy `-D warnings --all-targets` 通过 · 四方差分门 ALL MATCH · 布局门 PASSED · 200% DPI 实机点击/换选/移动/动画通过**。
+> 最近一次全量验证：**Rust 140 项测试通过 · 零编译警告 · clippy `-D warnings --all-targets` 通过 · 四方差分门 ALL MATCH · 布局门 PASSED · 200% DPI 实机点击/换选/移动/动画通过**。
 
 ---
 
@@ -40,12 +40,12 @@
 | Crate | 职责 | 依赖 | 测试 |
 |---|---|---|---|
 | `core` | 棋盘 · 规则 · RNG · 布局 · 引擎 · 输入 · 渲染指令 · 视图 · 状态 · 存档 · 菜单 · 特效 | **零依赖** | 68 |
-| `display` | 视口计算 · Lanczos-3 重采样 · 变体选择 | core | 11 |
-| `theme` | Classic/Dark/Light 色板 · 8pt 栅格 · 字阶 · 缓动 · 减少动效 · WCAG 对比度断言 | core | 27 |
+| `display` | 视口计算 · 素材变体选择 | core | 11 |
+| `theme` | Classic 色板 · 8pt 栅格 · 字阶 · WCAG 对比度断言 | core | 11 |
 | `storage` | 文本存档（save.txt） · 文件存储 · 原作榜单导入 | core · platform | 7 |
 | `platform` | 窗口事件 · 时钟 · 文件系统抽象 | core | 1 |
 | `render` | Renderer trait · wgpu 后端 · softbuffer 后端 · 动态字形图集 | core · assets | 10 |
-| `assets` | 精灵图集 · 图标条 · 变体命名 · 系统字体解析 | core · display · image | 4 |
+| `assets` | 精灵图集 · 图标条 · 变体命名 · 内嵌字体（含系统字体兜底） | core · display · image | 4 |
 | `app` | 装配层：事件循环 · 命令路由 · HUD · 菜单 · 移动/选中动画 · 角色 · 名字输入 · 特效 · 窗口几何 | 全部 | 36 |
 | `tools` | `rowline-replay` · `rowline-layout-check` · `rowline-dpi-probe` · `rowline-import` · `rowline-shot` | core · display · storage · app · render | — |
 
@@ -53,7 +53,7 @@
 
 | 项 | 状态 | 位置 |
 |---|---|---|
-| **Classic 主题（默认）**：#F0F0F0 UI / 黑棋盘 / #C0C0C0 立体格 / 原作 7 色 / 方角控件 | ✅ | `theme::Palette::CLASSIC` |
+| **唯一主题 = 原作 Classic**：#F0F0F0 UI / 黑棋盘 / #C0C0C0 立体格 / 原作精灵球 | ✅ | `theme::Palette::CLASSIC` |
 | **移动动画**：沿 4 邻域路径逐格滑动（60 ms/格，短移动最少 180 ms），动画期间 `Poll` 驱动，路径高亮 | ✅ | `Game::move_anim` · `move_animation_commands` |
 | **名字输入**：白色 Win95 编辑框、可见文本、IME（中文）提交、`确定(O)` 可点击 | ✅ | `app::game::name_entry_overlay` · `overlay_click` |
 | **选中动画**：球上跳 + 外扩圆环；点击另一球切换选中 | ✅ | `Game::select_anim` · `click_at` |
@@ -68,9 +68,9 @@
 | **棋盘下边框**：格阴影 + 2 px 黑覆盖窗口浮雕边 | ✅ | `board_bottom_edge` |
 | **对比度**：次要文字 `#606060`（AA）、隔行 `#E4E4E4`、角色加深 + 圆角描边 | ✅ | `theme::Palette::CLASSIC` |
 | **发布版无控制台窗口**（GUI 子系统；诊断不 panic） | ✅ | `app::main` · `render::canvas` |
-| **默认窗口**：604×396 客户区（372 内容 + 20 菜单 + 4 底部边框预留）；屏幕居中；几何随存档恢复 | ✅ | `core::save` · `core::layout` · `app::main` |
-| **HiDPI 输入**：物理坐标经 `Viewport` 反算为逻辑坐标（含 letterbox） | ✅ | `app::main::GpuApp::to_game` |
-| 设计令牌（色板 / 栅格 / 字阶 / 动效 / 无障碍） | ✅ | `rust/crates/theme/` |
+| **默认窗口**：760×480 客户区（26 px 紧凑菜单 + 内容）；屏幕居中；几何随存档恢复 | ✅ | `core::save` · `core::layout` · `app::main` |
+| **HiDPI 输入**：物理坐标经 `Viewport` 反算为逻辑坐标 | ✅ | `app::main::GpuApp::to_game` |
+| 设计令牌（色板 / 栅格 / 字阶 / 对比度） | ✅ | `rust/crates/theme/` |
 | SDF 形状管线（圆角 / 渐变 / 投影 / 辉光） | ✅ | `rust/crates/render/src/wgpu_backend.rs` |
 | 双管线 + 绘制列表（保 z 序） | ✅ | 同上 |
 | 动态字形图集（按 DPR 栅格化） | ✅ | `rust/crates/render/src/font.rs` |
@@ -79,15 +79,17 @@
 | 图标集（13 个线条图标 + SVG 源 + @1x/@2x/@3x/@4x） | ✅ | `tools/make_icons.py` |
 | 噪点纹理（256² 可平铺） | ✅ | `tools/make_icons.py` |
 | 精灵图集 @1x/@2x/@3x/@4x（真高分辨率重绘） | ✅ | `tools/make_sheet.py` |
-| 命令参考浮层（替代原作的 .hlp） | ✅ | `app/src/game.rs` |
+| 命令参考模态卡片（替代原作的 .hlp，带 × 与关闭按钮） | ✅ | `app/src/game.rs` |
 | **16 行榜单模型**（`- 空的 -` 占位、`N. 名字 分数` 格式） | ✅ | `rust/crates/core/src/scoreboard.rs` |
 | **双分数模型**（历史记录分 / 本局分，非 AI 对手） | ✅ | `core::scoreboard::Players` |
 | **高分榜窗口**（总榜 / 清除 / 确定） | ✅ | `app/src/game.rs` |
 | **名称输入窗口**（预填「挑战者」） | ✅ | `app/src/game.rs` |
-| **统计窗口**（空格子 + 7 色：数量/百分比/`消除-N`，默认关闭） | ✅ | `core::engine` + `app::game::stats_panel` |
+| **统计模态卡片**（空格子 + 7 色：数量/百分比/`消除-N`，居中、带关闭按钮） | ✅ | `core::engine` + `app::game::stats_panel` |
 | **消除动画**（2 × 50 ms 溶解 + 420 ms 胜利立绘） | ✅ | `app::game::{clear_animation_commands, win_lift}` |
 | **棋盘悬停环与最短路预览**（重设计） | ✅ | `Game::update_hover` + `hover_commands` |
 | **关于对话框** | ✅ | `app/src/game.rs` |
+| **姓名输入**：默认名全选、首次退格清空/输入替换、插入光标、IME 组合替换 | ✅ | `app/src/game.rs` |
+| **角色与台阶**：国王戴冠持杖，挑战者不戴冠；渐变光影、金属栏杆与地面反光 | ✅ | `app/src/game.rs::one_figure` |
 | **无路可走判定** | ✅ | `core::rules::has_legal_move()` |
 
 ### 1.5 工程化
@@ -95,9 +97,10 @@
 | 项 | 状态 | 位置 |
 |---|---|---|
 | Cargo workspace（9 crate） | ✅ | `rust/` |
-| Makefile（replay / check / rust / app / sheet / icons / test / package / dist / dist-ci） | ✅ | `Makefile` |
+| Makefile（replay / check / rust / app / sheet / icons / test / package / cross / dist / dist-ci） | ✅ | `Makefile` |
 | **Windows 工具链包装器**：自动定位真实 Python（跳过应用商店占位符 9009）与自定义 CARGO_HOME 下的 cargo | ✅ | `tools/win/py.ps1` · `tools/win/cargo.ps1` |
-| **单文件发布**：精灵图集与图标编译进 exe，无需 `assets/` 目录；Windows 单文件 **2.93 MB**（zip 单文件） | ✅ | `rowline_assets::embedded_*` · `tools/package.py` |
+| **单文件发布**：精灵图集、图标与中英文字体编译进 exe，无需 `assets/` 目录，也不依赖系统字体；单文件 **约 7.2 MB**（zip 单文件） | ✅ | `rowline_assets::embedded_*` · `embedded_font` · `tools/package.py` |
+| **macOS 应用包**：产物为 `Rowline.app`（`Info.plist` + ad-hoc 签名），双击由 LaunchServices 启动，不附带 Terminal 窗口 | ✅ | `tools/package.py` `make_macos_app` |
 | **体积**：`opt-level="z"` + fat LTO + strip + 按平台裁剪 wgpu 后端 + 去掉 serde/ron | ✅ | `rust/Cargo.toml` · `crates/*/Cargo.toml` |
 | **可选 Vulkan 回退**（无 DX12 的虚拟机/老显卡） | ✅ | `cargo build --features vulkan` |
 | CMakeLists（C 对照实现） | ✅ | `reference/c-impl/CMakeLists.txt` |
@@ -105,6 +108,7 @@
 | **素材可复现检查**：按解码像素比对（避免 zlib 版本差异误报）；生成器数值量化到 1e-6 | ✅ | `tools/check_assets.py` · `tools/make_icons.py` |
 | 打包脚本（平台 bundle + README + zip） | ✅ | `tools/package.py` |
 | **三平台发布构建**（宿主本机 + GitHub Actions；macOS 通用二进制；zip + SHA256） | ✅ | `tools/build_all.py` · `.github/workflows/release.yml` |
+| **macOS 本机三平台交叉构建**：`make cross` 直接产出 macOS universal、Windows mingw `.exe`、Linux 静态 musl ELF，无需 Docker/Linux 机器 | ✅ | `tools/build_cross.py` · `make cross` |
 | 零编译警告 | ✅ | `cargo build --workspace --all-features` |
 | **Windows 工具链自检**（cargo build/test + make test/shot + winprobe + 黑盒管线 + DPI 探针，证据归档） | ✅ 9/9 | `tools/win/verify.ps1` · `blackbox/windows_verify/20261021-192704/` |
 
@@ -119,12 +123,12 @@
 | **M2 输入** | ✅ | 点击选球 → 落子 → 消除；菜单优先于棋盘；物理→逻辑坐标换算（HiDPI） |
 | **M3 核心玩法** | ✅ | 规则语义已由反汇编 + 实机定标；四方差分门 `ALL MATCH` |
 | **M4 持久化** | ✅ | 手写文本存档（`save.txt`）+ 设置 + 高分榜 + 窗口几何；默认 feature 启用 `fs`；原作注册表导入器（`rowline-import`） |
-| **M5 表现** | ✅ | **Classic 默认主题**（Win95 配色/立体边/顶部 HUD/自绘菜单）· 深/浅可选 · 粒子 · 动画 · @1x–@4x · 减少动效 |
-| **截图对齐** | ✅ | 按 `docs/11` 修正：HUD 顶部横栏 · 下一组 3 颗球 · 黑底浅灰立体格 · 结束对话框 · 默认 604×396 客户区 |
+| **M5 表现** | ✅ | **Classic 唯一主题** · 紧凑双菜单 · 居中模态对话框 · 顶部 HUD · 粒子 · 动画 · 角色/台阶光影 · @1x–@4x |
+| **截图对齐** | ✅ | 按 `docs/11` 修正：HUD 顶部横栏 · 下一组 3 颗球 · 结束对话框；默认 760×480、Classic 立体格 |
 | **M6 交付** | ✅ | CI 三平台 + 资产可复现校验 + 打包脚本 + 三平台发布工作流 |
 | **发布** | ⬜ | 需商业授权（`REPORT.md` §5 R6） |
 
-> **截图对齐（`docs/11`）已完成**：下一组 3 颗球、HUD 顶部横栏、棋盘黑底浅灰格、
+> **截图对齐（`docs/11`）已完成**：下一组 3 颗球、HUD 顶部横栏、棋盘围边与格、
 > 游戏结束对话框均已实现并有回归测试。
 >
 > **M3 已闭环**：规则语义（直线清除、4 邻域移动、阈值 5、消线不补球、
@@ -168,11 +172,11 @@
 | ~~消除动画的多步时序~~ | ✅ 已由 `clear5` 连拍 + `0x401C48` 确认：2 × 50 ms 溶解 + 420 ms 胜利立绘 | docs/11 §5f |
 | 音效 | 原作无音频；若新增属功能扩展 | 需单独立项与授权评估 |
 | i18n | 界面固定为**简体中文**（与原作一致） | 文案集中在 `core::menu` 与 `app::commands`；如需英文版须另做一套并处理字体回退 |
-| ~~浅色主题的棋盘底纹~~ | ✅ 已加 `board_backdrop` / `board_cell`（暖纸底 + 米色格子） | `theme::Palette` |
-| ~~`Fixed` 策略未接入 UI 菜单~~ | ✅ 已加 `固定分辨率`（id 515，与 `Ctrl+R` 等价） | `core::menu` + `app` |
+| ~~浅色主题的棋盘底纹~~ | ✅ 唯一主题为原作 Classic：黑棋盘、#C0C0C0 立体格、精灵球 | `theme::Palette` |
+| ~~`Fixed` 策略未接入 UI 菜单~~ | ✅ 按重设计要求**移除**固定分辨率模式，视口始终铺满窗口 | `display::viewport` |
 | ~~素材只到 @3x~~ | ✅ 已补 @4x（精灵表 PNG + 图标） | `assets/sheet` / `assets/icons` |
 | ~~CPU 是否真的会自动走子~~ | ✅ **不会**：单人游戏，空闲 480 s 画面不变 | `BB-N03` 已闭环 |
-| 字体依赖系统 | 缺少 CJK 字体时中文会显示为方框 | 已按"优先 CJK、后拉丁"的顺序查找系统字体；如需自带字体须评估授权与体积 |
+| ~~字体依赖系统~~ | ✅ 已内嵌 WenQuanYi Micro Hei（Apache-2.0，覆盖拉丁 + CJK）；无 CJK 系统字体也不会出现方框 | `assets/font/` · `rowline_assets::embedded_font` |
 | Classic 的 UI 灰 | 取自 `COLOR_BTNFACE`：Win10/11 为 `#F0F0F0`，旧版 Windows 为 `#C0C0C0` | 与原作调用 `GetSysColor` 的行为一致，不做硬编码 |
 
 ---

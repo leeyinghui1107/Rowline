@@ -37,16 +37,6 @@ impl HeadlessWindow {
             pending: Vec::new(),
         }
     }
-
-    /// Queue an event for the next poll.
-    pub fn push_event(&mut self, ev: InputEvent) {
-        self.pending.push(ev);
-    }
-
-    /// The current title.
-    pub fn title(&self) -> &str {
-        &self.title
-    }
 }
 
 impl WindowBackend for HeadlessWindow {
@@ -79,10 +69,5 @@ impl HeadlessWindow {
     /// `true` once a quit was requested.
     pub fn quit_requested(&self) -> bool {
         self.quit
-    }
-
-    /// The enforced minimum size.
-    pub fn min_size(&self) -> Size {
-        self.min_size
     }
 }
