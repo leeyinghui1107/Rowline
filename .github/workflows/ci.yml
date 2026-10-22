@@ -92,10 +92,10 @@ jobs:
       - name: Render a frame without a GPU
         run: |
           ./rust/target/release/rowline-shot --out shot.png --width 1280 --height 900
-          ./rust/target/release/rowline-shot --out light.png --theme light \
+          ./rust/target/release/rowline-shot --out scores.png \
               --scenario scoreboard
           test -s shot.png
-          test -s light.png
+          test -s scores.png
 
   assets:
     name: Assets are reproducible
