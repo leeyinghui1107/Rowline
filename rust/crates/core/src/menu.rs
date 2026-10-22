@@ -73,11 +73,13 @@ pub struct MenuMetrics {
 impl Default for MenuMetrics {
     fn default() -> Self {
         MenuMetrics {
-            bar_height: 32.0,
-            row_height: 28.0,
-            row_width: 180.0,
-            title_width: 84.0,
-            pad: 8.0,
+            // The original uses a native Win32 menu: ~20 logical pixels tall,
+            // with 12 px labels.
+            bar_height: 20.0,
+            row_height: 20.0,
+            row_width: 160.0,
+            title_width: 56.0,
+            pad: 6.0,
         }
     }
 }
@@ -225,7 +227,8 @@ pub fn default_menus() -> Vec<Menu> {
             // The strings are the original's, as parsed from its RT_MENU
             // resource (analysis/menu_tree.txt): the interface is
             // Simplified Chinese.
-            title: "\u{6587}\u{4ef6}",
+            // The accelerator is part of the original title.
+            title: "\u{6587}\u{4ef6}(F)",
             items: vec![
                 MenuItem::item(256, "\u{65b0}\u{5efa}", "F4"),
                 MenuItem::separator(),
@@ -235,7 +238,7 @@ pub fn default_menus() -> Vec<Menu> {
             ],
         },
         Menu {
-            title: "\u{9009}\u{9879}",
+            title: "\u{9009}\u{9879}(O)",
             items: vec![
                 MenuItem::item(512, "\u{4e0b}\u{4e00}\u{7ec4}", "F3"),
                 MenuItem::item(513, "\u{663e}\u{793a}\u{7edf}\u{8ba1}", "F5"),

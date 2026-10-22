@@ -163,16 +163,19 @@ impl BallColors {
 /// Which theme is active.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThemeKind {
+    /// The original's Windows 3D look: system grey, black board, bevels.
+    Classic,
     Dark,
     Light,
 }
 
 impl ThemeKind {
-    /// The other theme.
+    /// The next theme in the Ctrl+T cycle.
     pub fn toggled(self) -> ThemeKind {
         match self {
+            ThemeKind::Classic => ThemeKind::Dark,
             ThemeKind::Dark => ThemeKind::Light,
-            ThemeKind::Light => ThemeKind::Dark,
+            ThemeKind::Light => ThemeKind::Classic,
         }
     }
 }
@@ -227,6 +230,14 @@ pub struct Palette {
     pub grid_line: Rgba,
     pub selection: Rgba,
 
+    // ---- score readouts -------------------------------------------------
+    /// The fill of the two HUD score boxes.
+    pub score_fill: Rgba,
+    /// The digits inside the score boxes.
+    pub score_text: Rgba,
+    /// The border around a score box.
+    pub score_border: Rgba,
+
     // ---- content -------------------------------------------------------
     pub balls: BallColors,
 }
@@ -258,6 +269,9 @@ impl Palette {
         glow: Rgba::hexa(0xFFC24B40),
         grid_line: Rgba::hexa(0xFFFFFF0F),
         selection: Rgba::hex(0xFFC24B),
+        score_fill: Rgba::hex(0x242833),
+        score_text: Rgba::hex(0xF2F4F8),
+        score_border: Rgba::hex(0x565F73),
         // Chosen by measurement: every ball clears 3:1 against the board
         // surface, and the seven greyscale values stay >= 1.18 apart.
         balls: BallColors {
@@ -299,6 +313,9 @@ impl Palette {
         glow: Rgba::hexa(0x9A5B0033),
         grid_line: Rgba::hexa(0x14161C12),
         selection: Rgba::hex(0x9A5B00),
+        score_fill: Rgba::hex(0xFFFFFF),
+        score_text: Rgba::hex(0x14161C),
+        score_border: Rgba::hex(0x9AA2B2),
         // Same constraints as the dark theme, inverted for a light board.
         balls: BallColors {
             c1: Rgba::hex(0x00850D),
@@ -311,9 +328,62 @@ impl Palette {
         },
     };
 
+    /// The original WinLinez v1.30 look.
+    ///
+    /// The original asks Windows for the 3D face colour (`COLOR_BTNFACE`),
+    /// paints the board strip black and draws the cells from its atlas.  On
+    /// current Windows that face colour is `#F0F0F0`; the cell plates in the
+    /// original bitmap are `#C0C0C0`.  The seven ball colours are the ones
+    /// recovered from the original atlas histogram.
+    pub const CLASSIC: Palette = Palette {
+        kind: ThemeKind::Classic,
+        // The client area outside the HUD is the black board strip.
+        background: Rgba::BLACK,
+        surface: Rgba::BLACK,
+        board_backdrop: Rgba::BLACK,
+        board_cell: Rgba::hex(0xC0C0C0),
+        // Windows 10/11's `COLOR_BTNFACE`, used by the menu and HUD.
+        surface_alt: Rgba::hex(0xF0F0F0),
+        surface_raised: Rgba::hex(0xF0F0F0),
+        // The Win95 menu highlight: navy with white text.
+        surface_hover: Rgba::hex(0x000080),
+        surface_active: Rgba::hex(0x000080),
+        outline: Rgba::hex(0x808080),
+        outline_strong: Rgba::BLACK,
+        text_primary: Rgba::BLACK,
+        text_secondary: Rgba::BLACK,
+        // The original's `下组` / `颜色` labels use a mid grey; #606060 keeps
+        // that look while clearing WCAG AA (5.2:1) on the #F0F0F0 bar.
+        text_tertiary: Rgba::hex(0x606060),
+        text_on_accent: Rgba::WHITE,
+        accent: Rgba::hex(0x000080),
+        accent_hover: Rgba::hex(0x000080),
+        success: Rgba::hex(0x008000),
+        warning: Rgba::hex(0x808000),
+        danger: Rgba::hex(0x800000),
+        // Win95 has no soft shadows or glows.
+        shadow: Rgba::TRANSPARENT,
+        glow: Rgba::TRANSPARENT,
+        grid_line: Rgba::BLACK,
+        selection: Rgba::hex(0x000080),
+        score_fill: Rgba::BLACK,
+        score_text: Rgba::WHITE,
+        score_border: Rgba::WHITE,
+        balls: BallColors {
+            c1: Rgba::hex(0x00A000),
+            c2: Rgba::hex(0x0000C0),
+            c3: Rgba::hex(0x00C0C0),
+            c4: Rgba::hex(0xC000C0),
+            c5: Rgba::hex(0xC00000),
+            c6: Rgba::hex(0xC0C000),
+            c7: Rgba::hex(0x800000),
+        },
+    };
+
     /// The palette for a theme kind.
     pub fn of(kind: ThemeKind) -> Palette {
         match kind {
+            ThemeKind::Classic => Palette::CLASSIC,
             ThemeKind::Dark => Palette::DARK,
             ThemeKind::Light => Palette::LIGHT,
         }
@@ -369,6 +439,33 @@ mod tests {
         assert_ne!(Palette::LIGHT.board_backdrop, Palette::DARK.board_backdrop);
         // The dark theme keeps the original's light-grey plates.
         assert_eq!(Palette::DARK.board_cell, Rgba::hex(0xC0C0C0));
+    }
+
+    #[test]
+    fn the_classic_theme_reproduces_the_original_palette() {
+        let p = Palette::CLASSIC;
+        assert_eq!(p.kind, ThemeKind::Classic);
+        // The original paints the board strip black and the plates
+        // #C0C0C0; the menu/HUD use the system 3D face.
+        assert_eq!(p.background, Rgba::BLACK);
+        assert_eq!(p.board_backdrop, Rgba::BLACK);
+        assert_eq!(p.board_cell, Rgba::hex(0xC0C0C0));
+        assert_eq!(p.surface_alt, Rgba::hex(0xF0F0F0));
+        assert_eq!(p.score_fill, Rgba::BLACK);
+        assert_eq!(p.score_text, Rgba::WHITE);
+        // The seven colours recovered from the original atlas histogram.
+        assert_eq!(
+            p.balls.all(),
+            [
+                Rgba::hex(0x00A000),
+                Rgba::hex(0x0000C0),
+                Rgba::hex(0x00C0C0),
+                Rgba::hex(0xC000C0),
+                Rgba::hex(0xC00000),
+                Rgba::hex(0xC0C000),
+                Rgba::hex(0x800000),
+            ]
+        );
     }
 
     #[test]

@@ -77,6 +77,8 @@ impl Command {
             Key::F4 => Command::NEW_GAME,
             Key::F5 => Command::TOGGLE_STATISTICS,
             Key::F6 => Command::TOGGLE_USE_FIGURES,
+            // Win32 menu mnemonic for 显示高分榜(&H).
+            Key::KeyH => Command::SHOW_HIGH_SCORES,
             _ => return None,
         })
     }

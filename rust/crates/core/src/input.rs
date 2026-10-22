@@ -118,6 +118,17 @@ pub enum InputEvent {
     },
     /// The pointer moved.
     MouseMoved { pos: Point },
+    /// Committed text from an input method (Chinese/Japanese/Korean IME).
+    ///
+    /// Physical key events still deliver Latin characters; this carries the
+    /// composed text that only the IME can produce.
+    TextInput { text: String },
+    /// The in-progress composition of an input method.
+    ///
+    /// An empty string means the composition ended.  While a composition is
+    /// active the physical letter keys are producing *pinyin*, not final
+    /// text, so the game must not append them to the name.
+    ImePreedit { text: String },
     /// The scroll wheel moved (positive = away from the user).
     MouseWheel { delta: f32 },
     /// The drawable area changed size (physical pixels).

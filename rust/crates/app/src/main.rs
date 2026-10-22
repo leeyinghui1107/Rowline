@@ -18,6 +18,14 @@
 //!         ->  viewport (physical pixels)  ->  wgpu
 //! ```
 
+// A release build is a GUI application: on Windows that means the **windows**
+// subsystem, so launching it from Explorer does not leave a console window
+// behind.  Debug builds keep the console for diagnostics.
+#![cfg_attr(
+    all(target_os = "windows", not(debug_assertions)),
+    windows_subsystem = "windows"
+)]
+
 use rowline_assets::AssetLoader;
 use rowline_core::input::Size;
 use rowline_core::layout::Layout;
@@ -37,6 +45,19 @@ type SaveFs = rowline_platform::OsFileSystem;
 #[cfg(not(feature = "fs"))]
 type SaveFs = rowline_platform::MemoryFileSystem;
 
+/// Write a diagnostic line without panicking.
+///
+/// A release build is a GUI-subsystem binary: when it is started from
+/// Explorer there is no console, and the `eprintln!` macro panics if
+/// writing to stderr fails.  Diagnostics must never take the game down, so
+/// the write result is ignored here.
+macro_rules! note {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        let _ = writeln!(std::io::stderr(), $($arg)*);
+    }};
+}
+
 fn save_fs() -> SaveFs {
     #[cfg(feature = "fs")]
     {
@@ -54,7 +75,7 @@ fn load_save(fs: &mut SaveFs) -> Option<rowline_core::save::SaveData> {
     match store.load() {
         Ok(d) => Some(d),
         Err(e) => {
-            eprintln!("rowline: cannot load the save: {e}");
+            note!("rowline: cannot load the save: {e}");
             None
         }
     }
@@ -64,13 +85,13 @@ fn load_save(fs: &mut SaveFs) -> Option<rowline_core::save::SaveData> {
 fn store_save(fs: &mut SaveFs, data: &rowline_core::save::SaveData) {
     let mut store = rowline_storage::Store::new(fs);
     if let Err(e) = store.save(data) {
-        eprintln!("rowline: cannot write the save: {e}");
+        note!("rowline: cannot write the save: {e}");
     }
 }
 
 fn main() {
     if let Err(e) = run() {
-        eprintln!("rowline: {e}");
+        note!("rowline: {e}");
         std::process::exit(1);
     }
 }
@@ -81,18 +102,48 @@ mod gpu {
     use super::*;
     use rowline_render::Renderer;
     use winit::application::ApplicationHandler;
-    use winit::dpi::PhysicalSize;
-    use winit::event::{ElementState, MouseButton as WinitMouseButton, WindowEvent};
-    use winit::event_loop::{ActiveEventLoop, EventLoop};
+    use winit::dpi::{LogicalPosition, PhysicalSize, Position};
+    use winit::event::{ElementState, Ime, MouseButton as WinitMouseButton, WindowEvent};
+    use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
     use winit::keyboard::{KeyCode, PhysicalKey};
     use winit::window::{Fullscreen, Window, WindowId};
 
-    /// The logical size the window is created at.
-    const INITIAL_LOGICAL: (f64, f64) = (1280.0, 960.0);
+    /// The logical client size the window is created at.
+    ///
+    /// The original's default is a 620x430 **outer** window, which is a
+    /// 604x371 client area at 100% Windows metrics; those are the dimensions
+    /// its layout formulas and the black-box screenshots were taken at.
+    /// Rowline draws its menu inside the client (the original used a native
+    /// menu outside it), so the menu strip is added on top, plus the rows
+    /// reserved for the window's bottom frame.  The 372-px content is the
+    /// smallest height the board fits into, keeping the board origin at the
+    /// original (138, 44).
+    const INITIAL_LOGICAL: (f64, f64) = (
+        604.0,
+        372.0
+            + rowline_core::layout::MENU_BAR_H as f64
+            + rowline_core::layout::FRAME_RESERVE as f64,
+    );
     /// The font used for the HUD, in logical units.
     const FONT_SIZE: f32 = 16.0;
-    /// Where the font lives, relative to the working directory.
-    const FONT_PATH: &str = "assets/font.ttf";
+
+    /// The directories that may contain the `assets/` tree.
+    ///
+    /// The executable's own directory comes first, so a packaged bundle works
+    /// when launched from a shortcut or another working directory; the
+    /// workspace-relative paths keep `cargo run` working.
+    fn asset_roots() -> Vec<std::path::PathBuf> {
+        let mut roots = Vec::new();
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                roots.push(dir.join("assets"));
+            }
+        }
+        roots.push("assets".into());
+        roots.push("../assets".into());
+        roots.push("../../assets".into());
+        roots
+    }
 
     pub struct GpuApp {
         game: Game,
@@ -106,6 +157,12 @@ mod gpu {
         logical: Size,
         /// The physical size of the client area.
         physical: Size,
+        /// The resolved logical/physical viewport.
+        ///
+        /// Input positions arrive in physical pixels; dividing by the
+        /// viewport maps them back into the content's logical coordinates
+        /// (including letterboxing and the retro policy).
+        viewport: rowline_display::Viewport,
         mods: rowline_core::input::Modifiers,
         fullscreen: bool,
         /// The last tick, for the effect timing.
@@ -123,6 +180,7 @@ mod gpu {
                 scale: 1.0,
                 logical: Size::new(INITIAL_LOGICAL.0 as f32, INITIAL_LOGICAL.1 as f32),
                 physical: Size::new(0.0, 0.0),
+                viewport: compute_viewport(&ScalePolicy::Logical, Size::new(0.0, 0.0), 1.0),
                 mods: Default::default(),
                 fullscreen: false,
                 last_tick: SystemClock.now_millis(),
@@ -130,8 +188,36 @@ mod gpu {
         }
 
         /// The game's layout, computed in **logical** units.
+        ///
+        /// The menu strip is drawn inside the window client, so the play
+        /// area is the remaining height; in retro mode the play area is the
+        /// fixed 640x480 design space instead of the window size.
         fn layout(&self) -> Layout {
-            Layout::compute(self.logical.width as i32, self.logical.height as i32)
+            let (w, h) = if self.game.settings().retro_mode {
+                (640, 480)
+            } else {
+                (self.logical.width as i32, self.logical.height as i32)
+            };
+            Layout::compute_framed(
+                w,
+                h,
+                rowline_core::layout::MENU_BAR_H,
+                rowline_core::layout::FRAME_RESERVE,
+            )
+        }
+
+        /// Map a physical window position into the content's logical units.
+        fn to_game(&self, x: f32, y: f32) -> rowline_core::input::Point {
+            let vp = &self.viewport;
+            let s = if vp.content_scale > 0.0 {
+                vp.content_scale
+            } else {
+                1.0
+            };
+            rowline_core::input::Point::new(
+                (x - vp.content_rect.x) / s,
+                (y - vp.content_rect.y) / s,
+            )
         }
 
         /// Recompute the viewport and hand it to the renderer.
@@ -148,6 +234,7 @@ mod gpu {
                 ScalePolicy::Logical
             };
             let vp = compute_viewport(&policy, self.physical, self.scale);
+            self.viewport = vp;
             let rect = rowline_core::render::Rect::new(
                 vp.content_rect.x,
                 vp.content_rect.y,
@@ -164,8 +251,8 @@ mod gpu {
         /// The view builder multiplies its texel coordinates by the sheet's
         /// integer scale, so the loaded scale is recorded on the game.
         fn install_sheet(&mut self) {
-            for root in ["assets", "../assets", "../../assets"] {
-                let mut loader = rowline_assets::FileAssetLoader::new(root);
+            for root in asset_roots() {
+                let mut loader = rowline_assets::FileAssetLoader::new(&root);
                 let sheet = loader.load_sheet(
                     &rowline_assets::AssetKey::SpriteSheet,
                     rowline_assets::GridSpec::ORIGINAL,
@@ -183,32 +270,34 @@ mod gpu {
                     Err(_) => continue,
                 }
             }
-            eprintln!("rowline: the sprite sheet is missing; run 'make sheet'");
+            note!("rowline: the sprite sheet is missing; run 'make sheet'");
         }
 
         /// Load the icon atlas.
         fn install_icons(&mut self) {
             // The highest variant that exists wins; the atlas is a strip of
             // square cells and is sampled 1:1 at the device resolution.
-            let candidates = [
-                "assets/icons/icons@4x.png",
-                "assets/icons/icons@3x.png",
-                "assets/icons/icons@2x.png",
-                "assets/icons/icons.png",
-            ];
-            for path in candidates {
-                let p = std::path::Path::new(path);
-                if !p.exists() {
-                    continue;
-                }
-                match rowline_assets::load_icon_strip(p, rowline_app::commands::ICON_COUNT) {
-                    Ok(strip) => {
-                        if let Some(r) = self.renderer.as_mut() {
-                            r.set_icons(&strip.pixels, strip.width, strip.height, strip.count);
-                        }
-                        break;
+            let candidates = ["icons@4x.png", "icons@3x.png", "icons@2x.png", "icons.png"];
+            for root in asset_roots() {
+                let mut done = false;
+                for name in candidates {
+                    let p = root.join("icons").join(name);
+                    if !p.exists() {
+                        continue;
                     }
-                    Err(e) => eprintln!("rowline: cannot load the icons: {e}"),
+                    match rowline_assets::load_icon_strip(&p, rowline_app::commands::ICON_COUNT) {
+                        Ok(strip) => {
+                            if let Some(r) = self.renderer.as_mut() {
+                                r.set_icons(&strip.pixels, strip.width, strip.height, strip.count);
+                            }
+                            done = true;
+                            break;
+                        }
+                        Err(e) => note!("rowline: cannot load the icons: {e}"),
+                    }
+                }
+                if done {
+                    break;
                 }
             }
         }
@@ -218,16 +307,43 @@ mod gpu {
         /// The bundled font wins; otherwise a system font is used, so the
         /// game always renders text.
         fn install_font(&mut self) {
-            let bytes = std::fs::read(FONT_PATH)
-                .ok()
+            let bytes = asset_roots()
+                .iter()
+                .find_map(|root| std::fs::read(root.join("font.ttf")).ok())
                 .or_else(|| rowline_assets::resolve_system_font().map(|(b, _)| b));
             let Some(bytes) = bytes else {
-                eprintln!("rowline: no usable font found; text will be omitted");
+                note!("rowline: no usable font found; text will be omitted");
                 return;
             };
             if let Some(r) = self.renderer.as_mut() {
                 let _ = r.set_font(bytes, FONT_SIZE, self.scale);
             }
+        }
+
+        /// Record the current window geometry in logical units.
+        ///
+        /// The outer position and the client size are what the original's
+        /// INI stores (`WindowX/Y/Width/Height`); persisting them here makes
+        /// the next launch reproduce the user's window exactly.
+        fn sync_window_geometry(&mut self) {
+            let Some(window) = self.window else { return };
+            let scale = if self.scale > 0.0 { self.scale } else { 1.0 };
+            let size = window.inner_size();
+            let (x, y) = window
+                .outer_position()
+                .map(|p| {
+                    (
+                        (p.x as f32 / scale).round() as i32,
+                        (p.y as f32 / scale).round() as i32,
+                    )
+                })
+                .unwrap_or((self.game.settings().window_x, self.game.settings().window_y));
+            self.game.set_window_geometry(
+                x,
+                y,
+                (size.width as f32 / scale).round().max(1.0) as u32,
+                (size.height as f32 / scale).round().max(1.0) as u32,
+            );
         }
 
         /// Apply a new physical size: reconfigure the surface and the viewport.
@@ -254,23 +370,54 @@ mod gpu {
                 .unwrap_or(1.0);
             self.scale = monitor_scale;
 
-            let attrs = Window::default_attributes()
+            // Restore the geometry the original keeps in its INI.  The
+            // stored size is the logical client area; the position is the
+            // logical outer position.  A negative position means "centre it",
+            // which is what the original does when the INI has no entry yet.
+            let settings = self.game.settings().clone();
+            let min = rowline_app::game::minimum_client_size();
+            let min_w = min.width.max(1.0);
+            let min_h = min.height
+                + rowline_core::layout::MENU_BAR_H as f32
+                + rowline_core::layout::FRAME_RESERVE as f32;
+            let want_w = (settings.window_width as f32).max(min_w);
+            let want_h = (settings.window_height as f32).max(min_h);
+            let mut attrs = Window::default_attributes()
                 .with_title(rowline_core::PRODUCT_NAME)
                 // A *logical* size: the window looks the same on every
                 // monitor, whatever its scale factor is.
                 .with_inner_size(PhysicalSize::new(
-                    (INITIAL_LOGICAL.0 * monitor_scale as f64) as u32,
-                    (INITIAL_LOGICAL.1 * monitor_scale as f64) as u32,
+                    (want_w * monitor_scale) as u32,
+                    (want_h * monitor_scale) as u32,
                 ))
                 // The layout needs at least this much room (docs/03 S3).
                 .with_min_inner_size(PhysicalSize::new(
-                    (rowline_app::game::minimum_client_size().width * monitor_scale) as u32,
-                    (rowline_app::game::minimum_client_size().height * monitor_scale) as u32,
+                    (min_w * monitor_scale) as u32,
+                    (min_h * monitor_scale) as u32,
                 ));
+            let position = if settings.window_x >= 0 && settings.window_y >= 0 {
+                Some(Position::Logical(LogicalPosition::new(
+                    settings.window_x as f64,
+                    settings.window_y as f64,
+                )))
+            } else {
+                event_loop.primary_monitor().map(|m| {
+                    let size = m.size();
+                    let mw = size.width as f64 / monitor_scale as f64;
+                    let mh = size.height as f64 / monitor_scale as f64;
+                    Position::Logical(LogicalPosition::new(
+                        ((mw - want_w as f64) * 0.5).max(0.0),
+                        ((mh - want_h as f64) * 0.5).max(0.0),
+                    ))
+                })
+            };
+            if let Some(p) = position {
+                attrs = attrs.with_position(p);
+            }
             let window = match event_loop.create_window(attrs) {
                 Ok(w) => w,
                 Err(e) => {
-                    eprintln!("rowline: cannot create window: {e}");
+                    note!("rowline: cannot create window: {e}");
                     event_loop.exit();
                     return;
                 }
@@ -283,25 +430,34 @@ mod gpu {
             // wgpu surface a 'static lifetime and removes a self-referential
             // borrow between the window and the renderer.
             let window: &'static Window = Box::leak(Box::new(window));
+            // The name-entry dialog accepts composed text (Chinese IME), just
+            // like the original's edit control.  The cursor area is placed
+            // near the field so the IME candidate window does not cover it.
+            window.set_ime_allowed(true);
+            window.set_ime_cursor_area(
+                winit::dpi::LogicalPosition::new(120.0, 150.0),
+                winit::dpi::LogicalSize::new(120.0, 24.0),
+            );
 
             let instance =
                 wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
             let surface = match instance.create_surface(window) {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("rowline: cannot create a GPU surface: {e}");
+                    note!("rowline: cannot create a GPU surface: {e}");
                     event_loop.exit();
                     return;
                 }
             };
             match rowline_render::wgpu_backend::WgpuRenderer::new(
+                &instance,
                 surface,
                 size.width.max(1),
                 size.height.max(1),
             ) {
                 Ok(r) => self.renderer = Some(r),
                 Err(e) => {
-                    eprintln!("rowline: cannot create the renderer: {e}");
+                    note!("rowline: cannot create the renderer: {e}");
                     event_loop.exit();
                 }
             }
@@ -320,11 +476,15 @@ mod gpu {
         ) {
             let layout = self.layout();
             match event {
-                WindowEvent::CloseRequested => event_loop.exit(),
+                WindowEvent::CloseRequested => {
+                    self.sync_window_geometry();
+                    event_loop.exit();
+                }
 
                 // ---- the window changed size ---------------------------------
                 WindowEvent::Resized(size) => {
                     self.set_physical_size(size.width, size.height);
+                    self.sync_window_geometry();
                     self.game.handle_event(
                         &rowline_core::input::InputEvent::Resized {
                             size: self.physical,
@@ -332,6 +492,8 @@ mod gpu {
                         layout,
                     );
                 }
+
+                WindowEvent::Moved(_) => self.sync_window_geometry(),
 
                 // ---- the window moved to a monitor with another DPI --------
                 //
@@ -352,7 +514,7 @@ mod gpu {
                         (old_logical_w * scale_factor as f32) as u32,
                         (old_logical_h * scale_factor as f32) as u32,
                     )) {
-                        eprintln!("rowline: cannot keep the logical size: {e}");
+                        note!("rowline: cannot keep the logical size: {e}");
                     }
                     // The physical size follows from the new scale factor.
                     let physical = self.window.map(|w| w.inner_size());
@@ -383,8 +545,10 @@ mod gpu {
                     };
                 }
                 WindowEvent::CursorMoved { position, .. } => {
-                    self.cursor =
-                        rowline_core::input::Point::new(position.x as f32, position.y as f32);
+                    // winit reports physical pixels; the game thinks in the
+                    // content's logical units.  Without this conversion every
+                    // click misses on a HiDPI display.
+                    self.cursor = self.to_game(position.x as f32, position.y as f32);
                     self.game.handle_event(
                         &rowline_core::input::InputEvent::MouseMoved { pos: self.cursor },
                         layout,
@@ -411,6 +575,18 @@ mod gpu {
                     };
                     self.game.handle_event(&ev, layout);
                 }
+                WindowEvent::Ime(Ime::Commit(text)) => {
+                    self.game
+                        .handle_event(&rowline_core::input::InputEvent::TextInput { text }, layout);
+                }
+                WindowEvent::Ime(Ime::Preedit(text, _)) => {
+                    // Track the composition so the raw pinyin typed by the
+                    // physical keys is replaced by the committed characters.
+                    self.game.handle_event(
+                        &rowline_core::input::InputEvent::ImePreedit { text },
+                        layout,
+                    );
+                }
                 WindowEvent::KeyboardInput { event, .. } => {
                     let Some(key) = translate_key(&event) else {
                         return;
@@ -428,7 +604,15 @@ mod gpu {
                     self.game.handle_event(&ev, layout);
                     // Ctrl+T / Ctrl+M / Ctrl+- toggle the presentation
                     // preferences; they never touch the game state.
-                    if matches!(event.state, ElementState::Pressed) && self.mods.control {
+                    // The platform's command modifier: Cmd on macOS, Ctrl
+                    // elsewhere.  The original is Windows-only, so this is
+                    // the cross-platform equivalent of its Ctrl shortcuts.
+                    let command_mod = if cfg!(target_os = "macos") {
+                        self.mods.logo
+                    } else {
+                        self.mods.control
+                    };
+                    if matches!(event.state, ElementState::Pressed) && command_mod {
                         match key {
                             rowline_core::input::Key::KeyT => self.game.toggle_theme(),
                             rowline_core::input::Key::KeyM => self.game.toggle_reduced_motion(),
@@ -459,7 +643,19 @@ mod gpu {
             let now = SystemClock.now_millis();
             let dt = ((now - self.last_tick) as f32 / 1000.0).min(0.1);
             self.last_tick = now;
-            self.game.tick(dt);
+            let layout = self.layout();
+            self.game.tick(dt, layout);
+            // Keep the loop running while an animation is in flight.  In the
+            // default Wait mode a click is the last event, so the move would
+            // otherwise advance exactly one frame and freeze.
+            if self.game.is_animating() {
+                event_loop.set_control_flow(ControlFlow::Poll);
+                if let Some(window) = self.window {
+                    window.request_redraw();
+                }
+            } else {
+                event_loop.set_control_flow(ControlFlow::Wait);
+            }
             // A menu command (固定分辨率) may have changed the display policy.
             if self.game.take_viewport_dirty() {
                 self.sync_viewport();
@@ -588,7 +784,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     use rowline_render::Renderer;
 
     let mut window = HeadlessWindow::default();
-    window.set_min_size(rowline_app::game::minimum_client_size());
+    let min = rowline_app::game::minimum_client_size();
+    window.set_min_size(Size::new(
+        min.width,
+        min.height
+            + rowline_core::layout::MENU_BAR_H as f32
+            + rowline_core::layout::FRAME_RESERVE as f32,
+    ));
     let clock = SystemClock;
     let mut game = Game::new(clock.now_millis() as u32, RuleModel::default());
     let mut fs = save_fs();
@@ -602,7 +804,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let scale = window.scale_factor();
         let physical = window.size();
         let logical = Size::new(physical.width / scale, physical.height / scale);
-        let layout = Layout::compute(logical.width as i32, logical.height as i32);
+        let layout = Layout::compute_framed(
+            logical.width as i32,
+            logical.height as i32,
+            rowline_core::layout::MENU_BAR_H,
+            rowline_core::layout::FRAME_RESERVE,
+        );
         let vp = compute_viewport(&ScalePolicy::Logical, physical, scale);
         renderer.set_viewport(
             rowline_core::render::Rect::new(

@@ -29,6 +29,18 @@ GRID = 24.0          # the design grid, in units
 STROKE = 2.0         # the stroke width, in units
 SUPERSAMPLE = 4      # anti-aliasing factor
 
+# Quantise every coordinate that comes out of a transcendental function.
+# `math.cos`/`hypot` may differ in their last bit between platforms and
+# Python/libm versions, which is enough to flip an anti-aliased pixel; the
+# CI job compares the regenerated PNGs byte for byte.  Six decimals is far
+# below one pixel and makes the output reproducible.
+PRECISION = 6
+
+
+def q(v):
+    r = round(v, PRECISION)
+    return 0.0 if r == 0 else r
+
 # --------------------------------------------------------------------- canvas
 class Mask:
     """An 8-bit coverage mask."""
@@ -71,27 +83,27 @@ class Shape:
         self.s = scale
 
     def _pt(self, x, y):
-        return x * self.s, y * self.s
+        return q(x * self.s), q(y * self.s)
 
     def line(self, x0, y0, x1, y1, w=STROKE):
         """A round-capped thick line."""
         half = w * self.s / 2.0
         ax, ay = self._pt(x0, y0)
         bx, by = self._pt(x1, y1)
-        dx, dy = bx - ax, by - ay
-        length = math.hypot(dx, dy)
+        dx, dy = q(bx - ax), q(by - ay)
+        length = q(math.hypot(dx, dy))
         steps = max(2, int(length / 0.35))
         for i in range(steps + 1):
             t = i / steps
-            px, py = ax + dx * t, ay + dy * t
-            self._disc(px, py, half)
+            self._disc(q(ax + dx * t), q(ay + dy * t), half)
 
     def _disc(self, cx, cy, r):
+        cx, cy, r = q(cx), q(cy), q(r)
         x0, x1 = int(cx - r - 1), int(cx + r + 2)
         y0, y1 = int(cy - r - 1), int(cy + r + 2)
         for y in range(y0, y1):
             for x in range(x0, x1):
-                d = math.hypot(x + 0.5 - cx, y + 0.5 - cy)
+                d = q(math.hypot(x + 0.5 - cx, y + 0.5 - cy))
                 if d <= r:
                     self.m.blend(x, y, 255)
                 elif d <= r + 1.0:
@@ -131,10 +143,10 @@ class Shape:
 
     def circle(self, cx, cy, r, filled=False):
         px, py = self._pt(cx, cy)
-        rr = r * self.s
+        rr = q(r * self.s)
         for y in range(int(py - rr - 1), int(py + rr + 2)):
             for x in range(int(px - rr - 1), int(px + rr + 2)):
-                d = math.hypot(x + 0.5 - px, y + 0.5 - py)
+                d = q(math.hypot(x + 0.5 - px, y + 0.5 - py))
                 if filled:
                     if d <= rr:
                         self.m.blend(x, y, 255)
@@ -150,11 +162,11 @@ class Shape:
 
     def arc(self, cx, cy, r, a0, a1):
         px, py = self._pt(cx, cy)
-        rr = r * self.s
+        rr = q(r * self.s)
         steps = max(8, int(abs(a1 - a0) * rr / 2))
         for i in range(steps + 1):
             a = a0 + (a1 - a0) * i / steps
-            self._disc(px + math.cos(a) * rr, py + math.sin(a) * rr, 1.2)
+            self._disc(q(px + math.cos(a) * rr), q(py + math.sin(a) * rr), 1.2)
 
     def poly(self, points, filled=True):
         # `points` are given in grid units, so they must be scaled to pixels
@@ -313,6 +325,12 @@ SVG_HEAD = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
             'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">\n')
 
 
+def fnum(v):
+    """A stable decimal representation (no platform-dependent repr)."""
+    s = ("%.*f" % (PRECISION, v)).rstrip("0").rstrip(".")
+    return s if s not in ("", "-0") else "0"
+
+
 def svg_for(name, fn):
     """A rough SVG mirror of the raster icon (the artist reference)."""
     parts = []
@@ -322,30 +340,32 @@ def svg_for(name, fn):
 
     class SvgShape(Shape):
         def line(self, x0, y0, x1, y1, w=STROKE):
-            lines.append(f'<line x1="{x0}" y1="{y0}" x2="{x1}" y2="{y1}" stroke-width="{w}"/>')
+            lines.append(f'<line x1="{fnum(x0)}" y1="{fnum(y0)}" x2="{fnum(x1)}" '
+                          f'y2="{fnum(y1)}" stroke-width="{fnum(w)}"/>')
 
         def rect(self, x, y, w, h, radius=0.0, filled=False):
             fill = 'currentColor' if filled else 'none'
-            rects.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" '
-                         f'rx="{radius}" fill="{fill}"/>')
+            rects.append(f'<rect x="{fnum(x)}" y="{fnum(y)}" width="{fnum(w)}" '
+                         f'height="{fnum(h)}" rx="{fnum(radius)}" fill="{fill}"/>')
 
         def circle(self, cx, cy, r, filled=False):
-            circles.append(f'<circle cx="{cx}" cy="{cy}" r="{r}"/>')
+            circles.append(f'<circle cx="{fnum(cx)}" cy="{fnum(cy)}" r="{fnum(r)}"/>')
 
         def poly(self, points, filled=True):
-            pts = " ".join(f"{x},{y}" for x, y in points)
+            pts = " ".join(f"{fnum(x)},{fnum(y)}" for x, y in points)
             fill = 'currentColor' if filled else 'none'
             parts.append(f'<polygon points="{pts}" fill="{fill}"/>')
 
         def polyline(self, points, w=STROKE):
-            pts = " ".join(f"{x},{y}" for x, y in points)
-            parts.append(f'<polyline points="{pts}" stroke-width="{w}"/>')
+            pts = " ".join(f"{fnum(x)},{fnum(y)}" for x, y in points)
+            parts.append(f'<polyline points="{pts}" stroke-width="{fnum(w)}"/>')
 
         def arc(self, cx, cy, r, a0, a1):
             pass
 
         def disc(self, cx, cy, r):
-            circles.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="currentColor" stroke="none"/>')
+            circles.append(f'<circle cx="{fnum(cx)}" cy="{fnum(cy)}" r="{fnum(r)}" '
+                           f'fill="currentColor" stroke="none"/>')
 
         def _disc(self, cx, cy, r):
             pass

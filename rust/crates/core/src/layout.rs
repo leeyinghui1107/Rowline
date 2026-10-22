@@ -40,9 +40,22 @@ pub const BOARD_FRAME_H: i32 = 328;
 /// itself is one pixel narrower, so the right margin is one pixel larger.
 pub const BOARD_SPAN_W: i32 = 328;
 /// The height of the HUD bar above the board.
-pub const HUD_H: i32 = 64;
-/// The height of the menu bar at the very top.
-pub const MENU_BAR_H: i32 = 32;
+///
+/// The original's client area starts below the native menu bar; its HUD
+/// occupies the first 44 logical pixels, because the board origin formula
+/// puts the board at `y = 44` for the default 604x371 client.
+pub const HUD_H: i32 = 44;
+/// The height of the drawn menu bar, in logical pixels.
+///
+/// The original used a native Win32 menu, which lives outside the client
+/// area.  Rowline draws the menu itself, so the window's client area is
+/// `HUD_H + board` tall **plus** this strip; the game layout is computed for
+/// the area below it (`Layout::compute_with_top`).
+pub const MENU_BAR_H: i32 = 20;
+/// Rows kept free at the bottom of the client for the raised window frame
+/// (1 px gap + 2 px bevel + 1 px spare), so the board ends **above** the
+/// frame instead of covering it.
+pub const FRAME_RESERVE: i32 = 4;
 /// The width reserved for the figure on each side.
 pub const FIGURE_W: i32 = 58;
 /// The height of the flanking figure slot (portrait plus pedestal).
@@ -63,6 +76,13 @@ const FIGURE_V_OFFSET: i32 = 100;
 pub struct Layout {
     pub client_w: i32,
     pub client_h: i32,
+    /// The height of the drawn menu strip above the game content.
+    ///
+    /// Zero for the pure layout formulas; the app uses [`MENU_BAR_H`] so the
+    /// menu is not part of the original 604x371 play area.
+    pub top: i32,
+    /// The rows reserved at the bottom of the client for the window frame.
+    pub bottom: i32,
     /// The top-left of the board frame.
     pub board_x: i32,
     pub board_y: i32,
@@ -89,6 +109,10 @@ impl Layout {
     /// 604x371 client area; [`Layout::compute`] clamps that away, while this
     /// function keeps the raw values so the calibration can be tested.
     pub fn raw(client_w: i32, client_h: i32) -> Layout {
+        Self::raw_framed(client_w, client_h, 0)
+    }
+
+    fn raw_framed(client_w: i32, client_h: i32, bottom: i32) -> Layout {
         // 0x40B060 / 0x40B064, exactly as the original's WM_SIZE does.
         let board_x = (client_w - BOARD_SPAN_W) / 2;
         let board_y = (client_h - BOARD_V_BIAS) / 2 + BOARD_V_OFFSET;
@@ -104,6 +128,8 @@ impl Layout {
         Layout {
             client_w,
             client_h,
+            top: 0,
+            bottom,
             board_x,
             board_y,
             left_figure_x,
@@ -125,19 +151,51 @@ impl Layout {
         l
     }
 
+    /// Compute the layout for the game content below a drawn menu strip.
+    ///
+    /// `client_h` is the whole window client area; `top` is the height of the
+    /// menu strip.  The original's formulas are applied to the **remaining**
+    /// height, then every region is shifted down by `top` so that drawing and
+    /// hit-testing use window coordinates throughout.
+    pub fn compute_with_top(client_w: i32, client_h: i32, top: i32) -> Layout {
+        Self::compute_framed(client_w, client_h, top, 0)
+    }
+
+    /// Compute the layout for content between a menu strip and the window's
+    /// own bottom frame.
+    ///
+    /// `bottom` reserves rows at the bottom of the client for the raised
+    /// window frame, so the board ends **above** the frame instead of
+    /// covering it.  Everything else follows [`Layout::compute_with_top`].
+    pub fn compute_framed(client_w: i32, client_h: i32, top: i32, bottom: i32) -> Layout {
+        let top = top.clamp(0, client_h.max(0));
+        let bottom = bottom.clamp(0, (client_h - top).max(0));
+        let content_h = (client_h - top - bottom).max(1);
+        let mut l = Layout::raw_framed(client_w, content_h, bottom);
+        l.top = top;
+        l.client_h = client_h;
+        l.board_y += top;
+        l.figure_y += top;
+        l.panel_y += top;
+        l.clamp();
+        l
+    }
+
     /// Keep every region inside the client area.
     pub fn clamp(&mut self) {
         if self.board_x < 0 {
             self.board_x = 0;
         }
-        if self.board_y < 0 {
-            self.board_y = 0;
+        if self.board_y < self.top {
+            self.board_y = self.top;
         }
         if self.board_x + BOARD_FRAME_W > self.client_w {
             self.board_x = (self.client_w - BOARD_FRAME_W).max(0);
         }
-        if self.board_y + BOARD_FRAME_H > self.client_h {
-            self.board_y = (self.client_h - BOARD_FRAME_H).max(0);
+        // The board must end above the window's bottom frame.
+        let limit = self.client_h - self.bottom;
+        if self.board_y + BOARD_FRAME_H > limit {
+            self.board_y = (limit - BOARD_FRAME_H).max(self.top);
         }
         if self.left_figure_x < 0 {
             self.left_figure_x = 0;
@@ -145,8 +203,8 @@ impl Layout {
         if self.right_figure_x + FIGURE_W > self.client_w {
             self.right_figure_x = (self.client_w - FIGURE_W).max(0);
         }
-        if self.figure_y < 0 {
-            self.figure_y = 0;
+        if self.figure_y < self.top {
+            self.figure_y = self.top;
         }
     }
 
@@ -247,6 +305,39 @@ mod tests {
         assert_eq!(l.left_figure_x, 40);
         assert_eq!(l.right_figure_x, 506);
         assert_eq!(l.figure_y, 168);
+    }
+
+    #[test]
+    fn the_menu_strip_is_outside_the_play_area() {
+        // The product adds the menu strip and the bottom frame reserve to the
+        // original's 371-px play area; the content keeps the original
+        // formulas (the 372-px content is the smallest one the board fits
+        // into, so the board origin is still (138, 44) inside the content).
+        let content_h = 372;
+        let client_h = content_h + MENU_BAR_H + FRAME_RESERVE;
+        let base = Layout::compute(604, content_h);
+        let l = Layout::compute_framed(604, client_h, MENU_BAR_H, FRAME_RESERVE);
+        assert_eq!(l.top, MENU_BAR_H);
+        assert_eq!(l.bottom, FRAME_RESERVE);
+        assert_eq!(l.client_h, client_h);
+        assert_eq!(l.board_x, base.board_x);
+        assert_eq!(l.board_y, base.board_y + MENU_BAR_H);
+        assert_eq!(l.figure_y, base.figure_y + MENU_BAR_H);
+        let (x, y) = l.cell_origin(0, 0);
+        assert_eq!(l.hit_cell(x + 18, y + 18), Some((0, 0)));
+    }
+
+    #[test]
+    fn the_board_ends_above_the_window_frame() {
+        for (w, h) in [(604, 396), (800, 620), (1920, 1080)] {
+            let l = Layout::compute_framed(w, h, MENU_BAR_H, FRAME_RESERVE);
+            assert!(
+                l.board_y + BOARD_FRAME_H <= h - FRAME_RESERVE,
+                "{w}x{h}: the board covers the window frame (bottom {})",
+                l.board_y + BOARD_FRAME_H
+            );
+            assert!(l.board_y >= MENU_BAR_H + HUD_H);
+        }
     }
 
     #[test]

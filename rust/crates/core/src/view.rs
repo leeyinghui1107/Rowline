@@ -9,8 +9,8 @@
 //! not the other way round).
 
 use crate::input::{Point, Size};
-use crate::layout::{Layout, BOARD_FRAME_H, CELL_PX, SPRITE_INSET};
-use crate::render::{Color, GradientDirection, Rect, RenderCmd, SpriteSheetId};
+use crate::layout::{Layout, BOARD_FRAME_H, BOARD_FRAME_W, CELL_PX};
+use crate::render::{Color, FrameStyle, GradientDirection, Rect, RenderCmd, SpriteSheetId};
 use crate::state::GameState;
 
 /// The colours and metrics the board is drawn with.
@@ -32,6 +32,13 @@ pub struct ViewStyle {
     pub selection: Color,
     /// The colour of the path preview.
     pub path: Color,
+    /// The highlight edge of the client frame (top / left).
+    pub frame_light: Color,
+    /// The shadow edge of the client frame (bottom / right).
+    pub frame_dark: Color,
+    /// How many pixels thick the client and board frames are; `0` disables
+    /// them (the modern themes keep their flat look).
+    pub frame_thickness: f32,
 }
 
 impl Default for ViewStyle {
@@ -44,6 +51,9 @@ impl Default for ViewStyle {
             cell_radius: 4.0,
             selection: Color::rgb(255, 255, 0),
             path: Color::rgb(255, 255, 255),
+            frame_light: Color::rgb(255, 255, 255),
+            frame_dark: Color::rgb(128, 128, 128),
+            frame_thickness: 0.0,
         }
     }
 }
@@ -77,34 +87,47 @@ pub fn build_frame(state: &GameState, style: &ViewStyle) -> Vec<RenderCmd> {
         color: style.board_backdrop,
     });
 
+    // ---- the board's raised frame ---------------------------------------
+    // The original's board sits in a 3D frame: light on the top/left, dark
+    // on the bottom/right, with a one-pixel gap before the cell plates.
+    if style.frame_thickness > 0.0 {
+        cmds.push(RenderCmd::Frame {
+            rect: Rect::new(
+                (l.board_x - 2) as f32,
+                l.board_y as f32,
+                (BOARD_FRAME_W + 4) as f32,
+                BOARD_FRAME_H as f32,
+            ),
+            style: FrameStyle::Raised,
+        });
+    }
+
     // ---- the cells ------------------------------------------------------
     for r in 0..state.side() {
         for c in 0..state.side() {
             let value = state.colour_at(r, c);
             let (dx, dy) = l.cell_origin(r as i32, c as i32);
-            let cell = Rect::new(dx as f32, dy as f32, CELL_PX as f32, CELL_PX as f32);
-            // The plate, then its border.
-            cmds.push(RenderCmd::RoundedRect {
-                rect: cell,
-                radius: style.cell_radius,
-                color: style.cell_fill,
-            });
-            cmds.push(RenderCmd::Outline {
-                rect: cell,
-                color: style.cell_border,
+            // The plate itself is a sprite: the original's empty-cell tile
+            // carries the Win95 bevel (white top/left, dark bottom/right)
+            // and the one-pixel black gap that forms the grid.
+            cmds.push(RenderCmd::Sprite {
+                sheet: SpriteSheetId::MAIN,
+                src: ball_src(0, state.use_figures as u8, state.sheet_scale),
+                dst: Point::new(dx as f32, dy as f32),
+                size: Size::new(CELL_PX as f32, CELL_PX as f32),
+                tint: Color::WHITE,
             });
             if value == 0 {
                 continue;
             }
-            // The ball, inset inside the plate.
+            // The ball.  It is sampled from the inner part of the cell,
+            // inside the tile's own bevel, so it sits on the plate instead
+            // of carrying a second frame.
             cmds.push(RenderCmd::Sprite {
                 sheet: SpriteSheetId::MAIN,
-                src: ball_src(value, state.use_figures as u8, state.sheet_scale),
-                dst: Point::new((dx + SPRITE_INSET) as f32, (dy + SPRITE_INSET) as f32),
-                size: Size::new(
-                    CELL_PX as f32 - 2.0 * SPRITE_INSET as f32,
-                    CELL_PX as f32 - 2.0 * SPRITE_INSET as f32,
-                ),
+                src: ball_inner_src(value, state.use_figures as u8, state.sheet_scale),
+                dst: Point::new((dx + BALL_INSET) as f32, (dy + BALL_INSET) as f32),
+                size: Size::new(BALL_PX as f32, BALL_PX as f32),
                 tint: Color::WHITE,
             });
         }
@@ -139,6 +162,25 @@ pub fn build_frame(state: &GameState, style: &ViewStyle) -> Vec<RenderCmd> {
     }
 
     cmds
+}
+
+/// How far the ball sprite is inset inside its cell, in logical pixels.
+///
+/// A cell is 36 px: a 2 px bevel on the light edges, a 1 px shadow and the
+/// 1 px black gap, which leaves a 30 px drawing area at (3, 3).
+pub const BALL_INSET: i32 = 3;
+/// The drawn diameter of a ball, in logical pixels.
+pub const BALL_PX: i32 = 30;
+
+/// The source rectangle of a ball **inside** the cell's bevel.
+pub fn ball_inner_src(value: u8, sprite_set: u8, sheet_scale: u32) -> Rect {
+    let mut src = ball_src(value, sprite_set, sheet_scale);
+    let inset = BALL_INSET as f32 * sheet_scale.max(1) as f32;
+    src.x += inset;
+    src.y += inset;
+    src.width = BALL_PX as f32 * sheet_scale.max(1) as f32;
+    src.height = BALL_PX as f32 * sheet_scale.max(1) as f32;
+    src
 }
 
 /// The source rectangle of a ball, following the index contract.
@@ -215,20 +257,20 @@ mod tests {
     }
 
     #[test]
-    fn every_cell_gets_a_plate_and_a_border() {
+    fn every_cell_draws_its_plate_from_the_atlas() {
         let cmds = build_frame(&sample(), &ViewStyle::default());
         let plates = cmds
             .iter()
-            .filter(|c| matches!(c, RenderCmd::RoundedRect { .. }))
+            .filter(|c| matches!(c, RenderCmd::Sprite { size, .. } if size.width == CELL_PX as f32))
             .count();
-        // 1 backdrop + 81 plates
-        assert_eq!(plates, 82);
+        assert_eq!(plates, 81);
+        // The only outline left is the selection ring; the bevel is baked
+        // into the atlas tile.
         let borders = cmds
             .iter()
             .filter(|c| matches!(c, RenderCmd::Outline { .. }))
             .count();
-        // 81 cell borders + 1 selection
-        assert_eq!(borders, 82);
+        assert_eq!(borders, 1);
     }
 
     #[test]
@@ -236,9 +278,21 @@ mod tests {
         let cmds = build_frame(&sample(), &ViewStyle::default());
         let balls = cmds
             .iter()
-            .filter(|c| matches!(c, RenderCmd::Sprite { .. }))
+            .filter(|c| matches!(c, RenderCmd::Sprite { size, .. } if size.width == BALL_PX as f32))
             .count();
         assert_eq!(balls, 2);
+    }
+
+    #[test]
+    fn the_ball_is_sampled_inside_the_cell_bevel() {
+        let src = ball_inner_src(5, 0, 2);
+        assert_eq!(src.x, (5 * 36 + BALL_INSET) as f32 * 2.0);
+        assert_eq!(src.y, (225 + BALL_INSET) as f32 * 2.0);
+        assert_eq!(src.width, BALL_PX as f32 * 2.0);
+        assert_eq!(src.height, BALL_PX as f32 * 2.0);
+        // The sampled area stays inside the 36 px cell (a compile-time fact
+        // for these constants).
+        const _: () = assert!(BALL_INSET + BALL_PX <= CELL_PX);
     }
 
     #[test]

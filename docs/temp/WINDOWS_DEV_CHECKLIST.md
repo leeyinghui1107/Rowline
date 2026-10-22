@@ -28,6 +28,8 @@
 | 计分 | 5→10 / 6→12 / 7→18 / 8→28 / 9→42 | `0x401E1D` |
 | 游戏结束 | 棋盘**无空位**才结束（不是“无路可走”） | `0x401CA1` |
 | HUD 结构 | **顶部横栏**：左分数框 / `下组` + 3 格预览 / `颜色` / 右分数框 | 截图 §2 |
+| 默认窗口 | 外层 **620×430**（INI 缺省值），屏幕居中；Win11 200% 客户区 **604×371** | `0x40123c` / `0x401257` / `0x4011d9` + 截图 §5g |
+| 默认配色 | UI `#F0F0F0`（`COLOR_BTNFACE`）、棋盘黑、格子 `#C0C0C0`、分数框黑底白字 | 200% 实机截图逐像素采样 §5g |
 | 两个分数框归属 | **左 = 历史记录分，右 = 本局当前分** | 截图 §5b + `0x40B2A8` / `0x40B06C` |
 | 对手 / AI | **没有**；单人游戏，空闲 480 s 画面不变 | 实机连续截图 |
 | 榜单 | 16 行，格式 `N. 名字    分数`，空槽 `- 空的 -` | 截图 §5b + 二进制 |
@@ -338,7 +340,7 @@ blackbox/
 | 检查 | 结果 | 证据 |
 |---|---|---|
 | `cargo build --release --workspace --all-features` | ✅ exit 0（Rust 1.99.1 GNU host，MSYS2 gcc 16.1.0） | `logs/cargo-build.log` |
-| `cargo test --release --workspace --all-features` | ✅ **140 passed / 0 failed**（22 个测试目标 + doc-tests） | `logs/cargo-test.log` |
+| `cargo test --release --workspace --all-features` | ✅ **165 passed / 0 failed**（22 个测试目标 + doc-tests） | `logs/cargo-test.log` |
 | `make test` | ✅ 布局门 `PASSED (0 failure(s))` + 四方差分门 `RESULT: ALL MATCH` | `logs/make-test.log` |
 | `make shot` | ✅ `build/shot.png`，1280×900，47,260 B | `logs/make-shot.log` |
 | 中文渲染 | ✅ `文件` / `选项` / `下组` / `颜色` / `国王` / `挑战者` 均为实际字形，**无方框** | `build/shot.png` |

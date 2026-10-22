@@ -60,6 +60,10 @@ struct ShapeVertex {
     local: [f32; 2],
     /// The rectangle's size, in pixels.
     size: [f32; 2],
+    /// The rectangle's top-left corner inside the content rect, in physical
+    /// pixels.  `local` alone is 0..w and would otherwise put every shape at
+    /// the top-left corner.
+    origin: [f32; 2],
     /// x = corner radius, y = blur, z = mode, w = is_shadow.
     params: [f32; 4],
     /// The primary colour.
@@ -74,8 +78,23 @@ struct ShapeVertex {
 struct Globals {
     /// The size of the swap chain, in physical pixels.
     viewport: [f32; 2],
+    /// WGSL aligns `vec4` to 16 bytes.
+    _pad: [f32; 2],
     /// x, y, w, h of the content rectangle, in physical pixels.
     content_rect: [f32; 4],
+}
+
+/// One textured quad: where it goes, which texels it samples and with which
+/// texture slot.
+#[derive(Clone, Copy, Debug)]
+struct QuadSpec {
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    uv: [f32; 4],
+    tint: Color,
+    layer: f32,
 }
 
 /// The description of one SDF shape.
@@ -114,21 +133,14 @@ pub struct WgpuRenderer<'w> {
     pipeline: wgpu::RenderPipeline,
     shape_pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
-    /// Kept for symmetry with the sprite bind group; the shape pipeline
-    /// only needs the globals.
-    #[allow(dead_code)]
-    shape_bind_group_layout: wgpu::BindGroupLayout,
     globals_buffer: wgpu::Buffer,
     solid_bind_group: wgpu::BindGroup,
     shape_bind_group: wgpu::BindGroup,
     sheet_bind_group: Option<wgpu::BindGroup>,
-    /// Kept alive because the bind group references it.
-    #[allow(dead_code)]
-    solid_texture: wgpu::TextureView,
+    /// The 1x1 white fallback used until a sprite sheet is installed.
+    solid_view: wgpu::TextureView,
     /// The font atlas (only with the `text` feature).
     font: Option<crate::font::FontAtlas>,
-    /// Bind group for the font atlas; recreated when the atlas is re-uploaded.
-    font_bind_group: Option<wgpu::BindGroup>,
     /// The sprite sheet's texture view (kept so the bind group can reference it).
     sheet_view: Option<wgpu::TextureView>,
     /// The sprite sheet's size in texels.  Source rectangles are expressed in
@@ -170,17 +182,30 @@ impl<'w> WgpuRenderer<'w> {
     /// match what the game intends), and **vsync** is preferred with a
     /// FIFO fallback.
     pub fn new(
+        instance: &wgpu::Instance,
         surface: wgpu::Surface<'w>,
         width: u32,
         height: u32,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
-        let adapter =
-            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))?;
+        // The surface belongs to `instance`: requesting the adapter from a
+        // different instance makes `get_capabilities` / `configure` trip over
+        // an `AdapterId` that the surface's instance has never seen.  Asking
+        // for an adapter that is compatible with the surface matters on
+        // multi-GPU machines, where the first adapter may not be able to
+        // present to this window at all.
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            compatible_surface: Some(&surface),
+            ..Default::default()
+        }))?;
 
         let capabilities = surface.get_capabilities(&adapter);
         let format = pick_format(&capabilities.formats);
         let present_mode = pick_present_mode(&capabilities.present_modes);
+        let alpha_mode = capabilities
+            .alpha_modes
+            .first()
+            .copied()
+            .unwrap_or(wgpu::CompositeAlphaMode::Auto);
 
         let (device, queue) =
             pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))?;
@@ -194,7 +219,7 @@ impl<'w> WgpuRenderer<'w> {
                 width: width.max(1),
                 height: height.max(1),
                 present_mode,
-                alpha_mode: capabilities.alpha_modes[0],
+                alpha_mode,
                 view_formats: vec![],
                 desired_maximum_frame_latency: 2,
             },
@@ -307,14 +332,26 @@ impl<'w> WgpuRenderer<'w> {
         let vertex_layout = wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Vertex>() as u64,
             step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Float32x4, 3 => Float32x4],
+            // Location 3 is the single `layer` scalar, not a vec4: the
+            // shader declares `layer: f32`.
+            attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Float32x4, 3 => Float32],
         };
         let shape_vertex_layout = wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<ShapeVertex>() as u64,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &wgpu::vertex_attr_array![
-                0 => Float32x2, 1 => Float32x2, 2 => Float32x4, 3 => Float32x4, 4 => Float32x4
+                0 => Float32x2, 1 => Float32x2, 2 => Float32x2,
+                3 => Float32x4, 4 => Float32x4, 5 => Float32x4
             ],
+        };
+
+        // The font atlas and the icon strip carry transparent texels, and the
+        // SDF shapes use alpha for their soft edges.  Alpha blending is what
+        // keeps those texels from painting opaque black/white boxes.
+        let color_target = wgpu::ColorTargetState {
+            format,
+            blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+            write_mask: wgpu::ColorWrites::ALL,
         };
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -336,7 +373,7 @@ impl<'w> WgpuRenderer<'w> {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
-                targets: &[Some(format.into())],
+                targets: &[Some(color_target.clone())],
             }),
             multiview_mask: None,
             cache: None,
@@ -361,7 +398,7 @@ impl<'w> WgpuRenderer<'w> {
                 module: &shape_shader,
                 entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
-                targets: &[Some(format.into())],
+                targets: &[Some(color_target)],
             }),
             multiview_mask: None,
             cache: None,
@@ -442,18 +479,17 @@ impl<'w> WgpuRenderer<'w> {
             pipeline,
             shape_pipeline,
             bind_group_layout,
-            shape_bind_group_layout,
             globals_buffer,
             solid_bind_group,
             shape_bind_group,
             sheet_bind_group: None,
             sheet_view: None,
-            // The fallback is the 1x1 white texture.
+            // The fallback is the 1x1 white texture, used both by
+            // `solid_bind_group` and until a sheet is installed.
+            solid_view: solid_texture,
             sheet_size: (1, 1),
-            solid_texture,
             font: None,
             font_bytes: None,
-            font_bind_group: None,
             font_texture,
             icon_texture,
             icon_count: 0,
@@ -462,7 +498,7 @@ impl<'w> WgpuRenderer<'w> {
             surface: Some(surface),
             surface_format: format,
             present_mode,
-            alpha_mode: capabilities.alpha_modes[0],
+            alpha_mode,
             clear_color: None,
             verts: Vec::new(),
             shapes: Vec::new(),
@@ -511,11 +547,20 @@ impl<'w> WgpuRenderer<'w> {
             size,
         );
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let sampler = white_sampler(&self.device);
-        self.sheet_view = Some(view.clone());
+        self.sheet_view = Some(view);
         self.sheet_size = (width.max(1), height.max(1));
+        self.rebuild_bind_group();
+    }
+
+    /// Rebuild the single bind group after any of its four textures changes.
+    ///
+    /// The layout has seven entries: globals, sheet, its sampler, font, its
+    /// sampler, icons and their sampler.  Keeping one constructor avoids the
+    /// classic "bind group has 5 entries, layout has 7" validation error.
+    fn rebuild_bind_group(&mut self) {
+        let sampler = white_sampler(&self.device);
         self.sheet_bind_group = Some(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("sheet"),
+            label: Some("sheet+font+icons"),
             layout: &self.bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -524,7 +569,7 @@ impl<'w> WgpuRenderer<'w> {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&view),
+                    resource: wgpu::BindingResource::TextureView(&self.sheet_view()),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -589,43 +634,9 @@ impl<'w> WgpuRenderer<'w> {
             size,
         );
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let sampler = white_sampler(&self.device);
-        self.sheet_bind_group = Some(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("sheet+icons"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: self.globals_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&self.sheet_view()),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(&self.font_texture),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 5,
-                    resource: wgpu::BindingResource::TextureView(&view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 6,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-            ],
-        }));
         self.icon_texture = view;
         self.icon_count = count;
+        self.rebuild_bind_group();
     }
 
     /// The number of icons in the atlas.
@@ -637,7 +648,7 @@ impl<'w> WgpuRenderer<'w> {
     fn sheet_view(&self) -> wgpu::TextureView {
         self.sheet_view
             .clone()
-            .unwrap_or_else(|| self.solid_texture.clone())
+            .unwrap_or_else(|| self.solid_view.clone())
     }
 
     /// Install a font.
@@ -708,34 +719,8 @@ impl<'w> WgpuRenderer<'w> {
             },
         );
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let sampler = white_sampler(&self.device);
-        self.font_bind_group = Some(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("font"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: self.globals_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&self.font_texture),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(&view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-            ],
-        }));
         self.font_texture = view;
+        self.rebuild_bind_group();
         if let Some(a) = self.font.as_mut() {
             a.clear_dirty();
         }
@@ -787,7 +772,19 @@ impl<'w> WgpuRenderer<'w> {
     /// pixels; the result is then expressed relative to the content rect so
     /// that the shader only has to do the final mapping.  This is the single
     /// place where the logical-to-physical conversion happens.
-    fn push_quad(&mut self, x: f32, y: f32, w: f32, h: f32, uv: [f32; 4], tint: Color) {
+    ///
+    /// `layer` selects the texture the fragment shader samples: 0 = sprite
+    /// sheet, 1 = font atlas, 2 = icon atlas.
+    fn push_quad_layer(&mut self, q: QuadSpec) {
+        let QuadSpec {
+            x,
+            y,
+            w,
+            h,
+            uv,
+            tint,
+            layer,
+        } = q;
         let r = self.content_rect;
         let sx = if r.width > 0.0 { r.width } else { 1.0 };
         let sy = if r.height > 0.0 { r.height } else { 1.0 };
@@ -805,137 +802,62 @@ impl<'w> WgpuRenderer<'w> {
             tint.a as f32 / 255.0,
         ];
         let first = self.verts.len() as u32;
-        let a = Vertex {
-            pos: [x0, y0],
-            uv: [uv[0], uv[1]],
+        let mk = |px: f32, py: f32, u: f32, v: f32| Vertex {
+            pos: [px, py],
+            uv: [u, v],
             tint: t,
-            layer: 0.0,
+            layer,
         };
-        let b = Vertex {
-            pos: [x1, y0],
-            uv: [uv[2], uv[1]],
-            tint: t,
-            layer: 0.0,
-        };
-        let c = Vertex {
-            pos: [x0, y1],
-            uv: [uv[0], uv[3]],
-            tint: t,
-            layer: 0.0,
-        };
-        let d = Vertex {
-            pos: [x1, y1],
-            uv: [uv[2], uv[3]],
-            tint: t,
-            layer: 0.0,
-        };
-        self.verts.extend_from_slice(&[a, b, c, a, c, d]);
+        push_quad_vertices(
+            &mut self.verts,
+            mk(x0, y0, uv[0], uv[1]),
+            mk(x1, y0, uv[2], uv[1]),
+            mk(x0, y1, uv[0], uv[3]),
+            mk(x1, y1, uv[2], uv[3]),
+        );
         self.order.push(DrawItem {
             batch: Batch::Sprite,
             first,
             count: 6,
+        });
+    }
+
+    /// Push a sprite-sheet quad.
+    fn push_quad(&mut self, x: f32, y: f32, w: f32, h: f32, uv: [f32; 4], tint: Color) {
+        self.push_quad_layer(QuadSpec {
+            x,
+            y,
+            w,
+            h,
+            uv,
+            tint,
+            layer: 0.0,
         });
     }
 
     /// Push a quad that samples the **icon atlas**.
     fn push_quad_icon(&mut self, x: f32, y: f32, w: f32, h: f32, uv: [f32; 4], tint: Color) {
-        let r = self.content_rect;
-        let sx = if r.width > 0.0 { r.width } else { 1.0 };
-        let sy = if r.height > 0.0 { r.height } else { 1.0 };
-        let k = self.content_scale;
-        let px = r.x + x * k;
-        let py = r.y + y * k;
-        let pw = w * k;
-        let ph = h * k;
-        let (x0, y0) = ((px - r.x) / sx, (py - r.y) / sy);
-        let (x1, y1) = ((px + pw - r.x) / sx, (py + ph - r.y) / sy);
-        let t = [
-            tint.r as f32 / 255.0,
-            tint.g as f32 / 255.0,
-            tint.b as f32 / 255.0,
-            tint.a as f32 / 255.0,
-        ];
-        let first = self.verts.len() as u32;
-        let a = Vertex {
-            pos: [x0, y0],
-            uv: [uv[0], uv[1]],
-            tint: t,
+        self.push_quad_layer(QuadSpec {
+            x,
+            y,
+            w,
+            h,
+            uv,
+            tint,
             layer: 2.0,
-        };
-        let b = Vertex {
-            pos: [x1, y0],
-            uv: [uv[2], uv[1]],
-            tint: t,
-            layer: 2.0,
-        };
-        let c = Vertex {
-            pos: [x0, y1],
-            uv: [uv[0], uv[3]],
-            tint: t,
-            layer: 2.0,
-        };
-        let d = Vertex {
-            pos: [x1, y1],
-            uv: [uv[2], uv[3]],
-            tint: t,
-            layer: 2.0,
-        };
-        self.verts.extend_from_slice(&[a, b, c, a, c, d]);
-        self.order.push(DrawItem {
-            batch: Batch::Sprite,
-            first,
-            count: 6,
         });
     }
 
     /// Push a quad that samples the **font atlas** instead of the sheet.
     fn push_quad_font(&mut self, x: f32, y: f32, w: f32, h: f32, uv: [f32; 4], tint: Color) {
-        let r = self.content_rect;
-        let sx = if r.width > 0.0 { r.width } else { 1.0 };
-        let sy = if r.height > 0.0 { r.height } else { 1.0 };
-        let k = self.content_scale;
-        let px = r.x + x * k;
-        let py = r.y + y * k;
-        let pw = w * k;
-        let ph = h * k;
-        let (x0, y0) = ((px - r.x) / sx, (py - r.y) / sy);
-        let (x1, y1) = ((px + pw - r.x) / sx, (py + ph - r.y) / sy);
-        let t = [
-            tint.r as f32 / 255.0,
-            tint.g as f32 / 255.0,
-            tint.b as f32 / 255.0,
-            tint.a as f32 / 255.0,
-        ];
-        let first = self.verts.len() as u32;
-        let a = Vertex {
-            pos: [x0, y0],
-            uv: [uv[0], uv[1]],
-            tint: t,
+        self.push_quad_layer(QuadSpec {
+            x,
+            y,
+            w,
+            h,
+            uv,
+            tint,
             layer: 1.0,
-        };
-        let b = Vertex {
-            pos: [x1, y0],
-            uv: [uv[2], uv[1]],
-            tint: t,
-            layer: 1.0,
-        };
-        let c = Vertex {
-            pos: [x0, y1],
-            uv: [uv[0], uv[3]],
-            tint: t,
-            layer: 1.0,
-        };
-        let d = Vertex {
-            pos: [x1, y1],
-            uv: [uv[2], uv[3]],
-            tint: t,
-            layer: 1.0,
-        };
-        self.verts.extend_from_slice(&[a, b, c, a, c, d]);
-        self.order.push(DrawItem {
-            batch: Batch::Sprite,
-            first,
-            count: 6,
         });
     }
 
@@ -960,21 +882,17 @@ impl<'w> WgpuRenderer<'w> {
     /// The shape is described in its own pixel space so that the fragment
     /// shader can evaluate the signed distance field exactly.
     fn push_shape(&mut self, s: ShapeSpec) {
-        let r = self.content_rect;
-        let sx = if r.width > 0.0 { r.width } else { 1.0 };
-        let sy = if r.height > 0.0 { r.height } else { 1.0 };
         let k = self.content_scale;
         // The shape's rectangle in physical pixels.  The vertex carries the
-        // *shape-local* pixel coordinates; the shader maps them into the
-        // content rectangle, so the absolute origin is not needed here.
+        // *shape-local* pixel coordinates plus the rectangle's origin inside
+        // the content rect, so the shader can place it and still evaluate the
+        // signed distance field in shape-local space.
         let pw = (s.rect.width * k).max(0.0);
         let ph = (s.rect.height * k).max(0.0);
         if pw <= 0.0 || ph <= 0.0 {
             return;
         }
         let radius_px = (s.radius * k).clamp(0.0, pw.min(ph) * 0.5);
-
-        let _ = (sx, sy);
 
         let ca = [
             s.color_a.r as f32 / 255.0,
@@ -990,9 +908,11 @@ impl<'w> WgpuRenderer<'w> {
         ];
         let params = [radius_px, s.blur * k, s.mode, s.kind];
 
+        let origin = [s.rect.x * k, s.rect.y * k];
         let mk = |lx: f32, ly: f32| ShapeVertex {
             local: [lx, ly],
             size: [pw, ph],
+            origin,
             params,
             color_a: ca,
             color_b: cb,
@@ -1264,10 +1184,22 @@ impl Renderer for WgpuRenderer<'_> {
             });
             if !self.verts.is_empty() {
                 let data: &[u8] = bytemuck::cast_slice(&self.verts);
+                ensure_vertex_buffer(
+                    &mut self.vertex_buffer,
+                    &self.device,
+                    "vertices",
+                    data.len() as u64,
+                );
                 self.queue.write_buffer(&self.vertex_buffer, 0, data);
             }
             if !self.shapes.is_empty() {
                 let data: &[u8] = bytemuck::cast_slice(&self.shapes);
+                ensure_vertex_buffer(
+                    &mut self.shape_vertex_buffer,
+                    &self.device,
+                    "shape-vertices",
+                    data.len() as u64,
+                );
                 self.queue.write_buffer(&self.shape_vertex_buffer, 0, data);
             }
             self.queue.write_buffer(
@@ -1275,6 +1207,7 @@ impl Renderer for WgpuRenderer<'_> {
                 0,
                 bytemuck::bytes_of(&Globals {
                     viewport: [self.size.width, self.size.height],
+                    _pad: [0.0; 2],
                     content_rect: [
                         self.content_rect.x,
                         self.content_rect.y,
@@ -1327,7 +1260,12 @@ pub fn pick_format(formats: &[wgpu::TextureFormat]) -> wgpu::TextureFormat {
         .iter()
         .copied()
         .find(|f| f.is_srgb())
-        .unwrap_or(formats[0])
+        .unwrap_or_else(|| {
+            formats
+                .first()
+                .copied()
+                .unwrap_or(wgpu::TextureFormat::Bgra8UnormSrgb)
+        })
 }
 
 /// Prefer vsync; fall back to FIFO, then to whatever is available.
@@ -1337,7 +1275,7 @@ pub fn pick_present_mode(modes: &[wgpu::PresentMode]) -> wgpu::PresentMode {
     } else if modes.contains(&wgpu::PresentMode::Fifo) {
         wgpu::PresentMode::Fifo
     } else {
-        modes[0]
+        modes.first().copied().unwrap_or(wgpu::PresentMode::Fifo)
     }
 }
 
@@ -1385,6 +1323,43 @@ fn solid_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::TextureVie
         },
     );
     texture.create_view(&wgpu::TextureViewDescriptor::default())
+}
+
+/// Grow a vertex buffer when the frame needs more room than it has.
+///
+/// The command count depends on the window size and on the number of
+/// outlined cells, so a fixed allocation will eventually overflow.  Growing
+/// to the next power of two keeps the reallocations amortised.
+fn ensure_vertex_buffer(
+    buffer: &mut wgpu::Buffer,
+    device: &wgpu::Device,
+    label: &str,
+    required: u64,
+) {
+    let needed = required.next_power_of_two().max(64 * 1024);
+    if needed <= buffer.size() {
+        return;
+    }
+    *buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some(label),
+        size: needed,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+}
+
+/// Indices of the six vertices that make a textured quad from its corners in
+/// top-left, top-right, bottom-left, bottom-right order.
+///
+/// The split is `(TL, TR, BL)` + `(TR, BR, BL)`.  The tempting
+/// `(TL, BL, BR)` second triangle does not tile the quad: it leaves an
+/// unfilled wedge along the right edge, which shows up as a bitten-out ball
+/// and clipped glyphs.
+const QUAD_INDICES: [usize; 6] = [0, 1, 2, 1, 3, 2];
+
+fn push_quad_vertices(verts: &mut Vec<Vertex>, a: Vertex, b: Vertex, c: Vertex, d: Vertex) {
+    let corners = [a, b, c, d];
+    verts.extend(QUAD_INDICES.iter().map(|&i| corners[i]));
 }
 
 fn white_sampler(device: &wgpu::Device) -> wgpu::Sampler {
@@ -1472,10 +1447,12 @@ struct VertexIn {
     @location(0) local: vec2<f32>,
     // The rectangle's size, in pixels.
     @location(1) size: vec2<f32>,
+    // The rectangle's top-left corner inside the content rect.
+    @location(2) origin: vec2<f32>,
     // x = corner radius, y = blur, z = mode, w = kind.
-    @location(2) params: vec4<f32>,
-    @location(3) color_a: vec4<f32>,
-    @location(4) color_b: vec4<f32>,
+    @location(3) params: vec4<f32>,
+    @location(4) color_a: vec4<f32>,
+    @location(5) color_b: vec4<f32>,
 };
 struct VertexOut {
     @builtin(position) clip: vec4<f32>,
@@ -1489,8 +1466,7 @@ struct VertexOut {
 @vertex
 fn vs_main(v: VertexIn) -> VertexOut {
     var out: VertexOut;
-    // content-local (0..1) -> the shape's pixel box
-    let px = globals.content_rect.xy + v.local * globals.content_rect.zw / v.size;
+    let px = globals.content_rect.xy + v.origin + v.local;
     let ndc = vec2<f32>(
         px.x / max(globals.viewport.x, 1.0) * 2.0 - 1.0,
         1.0 - px.y / max(globals.viewport.y, 1.0) * 2.0
@@ -1547,3 +1523,37 @@ fn fs_main(v: VertexOut) -> @location(0) vec4<f32> {
     return vec4<f32>(col.rgb, col.a * cov);
 }
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::QUAD_INDICES;
+
+    fn edge(p: [f32; 2], a: [f32; 2], b: [f32; 2]) -> f32 {
+        (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
+    }
+
+    fn inside(p: [f32; 2], tri: [[f32; 2]; 3]) -> bool {
+        let d1 = edge(p, tri[0], tri[1]);
+        let d2 = edge(p, tri[1], tri[2]);
+        let d3 = edge(p, tri[2], tri[0]);
+        (d1 >= -1e-5 && d2 >= -1e-5 && d3 >= -1e-5) || (d1 <= 1e-5 && d2 <= 1e-5 && d3 <= 1e-5)
+    }
+
+    #[test]
+    fn the_quad_triangles_cover_every_point() {
+        let corners = [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]];
+        let triangles: Vec<[[f32; 2]; 3]> = QUAD_INDICES
+            .chunks(3)
+            .map(|t| [corners[t[0]], corners[t[1]], corners[t[2]]])
+            .collect();
+        for i in 0..=32 {
+            for j in 0..=32 {
+                let p = [i as f32 / 32.0, j as f32 / 32.0];
+                assert!(
+                    triangles.iter().any(|t| inside(p, *t)),
+                    "point {p:?} is not covered"
+                );
+            }
+        }
+    }
+}

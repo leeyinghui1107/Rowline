@@ -194,6 +194,29 @@ fn push_quad(&mut self, x: f32, y: f32, w: f32, h: f32, uv: [f32; 4], tint: Colo
 
 ---
 
+### 2.4 输入坐标的反算（必须与渲染共用同一个 `Viewport`）
+
+winit 的 `CursorMoved` 给的是**物理像素**，而布局与命中测试使用**内容的
+逻辑单位**。两者必须经过同一个 `Viewport` 换算：
+
+```text
+logical.x = (physical.x - content_rect.x) / content_scale
+logical.y = (physical.y - content_rect.y) / content_scale
+```
+
+* `ScalePolicy::Logical`：`content_rect` 覆盖整个窗口，`content_scale` 就是
+  DPI 缩放，于是等价于 `physical / scale`；
+* `ScalePolicy::Fixed`：`content_rect` 是 letterbox 后的内容区域，
+  `content_scale` 是整数（或拟合）倍率；
+* 菜单、HUD、棋盘、对话框全部用同一套逻辑坐标，所以只需在事件入口换算一次。
+
+> **回归教训**：早期代码把物理坐标直接传给 `Layout::hit_cell`。在 200% 屏上
+> 点击位置整体偏移一倍，表现为“点不中球、不能移动”。现在由
+> `GpuApp::to_game` 统一换算，并在 200% 实机上用合成鼠标事件验证
+> 选中 → 移动 → `Moved`。
+
+---
+
 ## 3. 渲染策略
 
 ### 3.1 矢量 / UI 元素 —— 按物理像素重绘

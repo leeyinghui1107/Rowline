@@ -34,6 +34,14 @@ enum Scenario {
     About,
     /// The end-of-game dialog.
     GameOver,
+    /// A round at 160 against the 100-point record: the challenger stands
+    /// above the king.
+    Record,
+    /// The moment after the record round: the king has taken the
+    /// challenger's height and the challenger is back on the floor.
+    AfterRecord,
+    /// The name-entry dialog.
+    NameEntry,
     /// A game in progress with the statistics window open.
     Stats,
     /// A just-completed five-ball clear, captured mid-dissolve.
@@ -45,7 +53,7 @@ fn main() {
     let mut width = 1280.0_f32;
     let mut height = 900.0_f32;
     let mut scale = 1.0_f32;
-    let mut light = false;
+    let mut theme = String::from("classic");
     let mut scenario = Scenario::New;
     let mut seed = 7_u32;
 
@@ -58,13 +66,16 @@ fn main() {
             "--height" => height = value().parse().unwrap_or(height),
             "--scale" => scale = value().parse().unwrap_or(scale),
             "--seed" => seed = value().parse().unwrap_or(seed),
-            "--theme" => light = value() == "light",
+            "--theme" => theme = value(),
             "--scenario" => {
                 scenario = match value().as_str() {
                     "board" => Scenario::Board,
                     "scoreboard" => Scenario::Scoreboard,
                     "about" => Scenario::About,
                     "gameover" => Scenario::GameOver,
+                    "record" => Scenario::Record,
+                    "afterrecord" => Scenario::AfterRecord,
+                    "nameentry" => Scenario::NameEntry,
                     "stats" => Scenario::Stats,
                     "clear" => Scenario::Clear,
                     _ => Scenario::New,
@@ -73,8 +84,8 @@ fn main() {
             "--help" | "-h" => {
                 eprintln!(
                     "usage: rowline-shot [--out FILE] [--width N] [--height N] \
-                     [--scale N] [--theme dark|light] [--scenario new|board|\
-                     scoreboard|about|gameover|stats|clear] [--seed N]"
+                     [--scale N] [--theme classic|dark|light] [--scenario new|board|\
+                     scoreboard|about|gameover|nameentry|stats|clear] [--seed N]"
                 );
                 return;
             }
@@ -86,15 +97,23 @@ fn main() {
     }
 
     let mut game = Game::new(seed, RuleModel::default());
-    if light {
-        game.toggle_theme();
+    match theme.as_str() {
+        "dark" => game.set_theme(rowline_theme::ThemeKind::Dark),
+        "light" => game.set_theme(rowline_theme::ThemeKind::Light),
+        // Classic is the product default.
+        _ => {}
     }
     let sheet = load_sheet(scale);
     if let Some((_image, sheet_scale)) = &sheet {
         game.set_sheet_scale(*sheet_scale);
     }
 
-    let layout = Layout::compute(width as i32, height as i32);
+    let layout = Layout::compute_framed(
+        width as i32,
+        height as i32,
+        rowline_core::layout::MENU_BAR_H,
+        rowline_core::layout::FRAME_RESERVE,
+    );
     match scenario {
         Scenario::New => {}
         Scenario::Board => {
@@ -110,6 +129,23 @@ fn main() {
         Scenario::GameOver => {
             game.engine_mut().new_game();
             game.set_game_over(true);
+        }
+        Scenario::Record => {
+            // A round at 160 against the default record of 100: the
+            // challenger stands above the king and has reached the cap.
+            game.engine_mut().set_score(160);
+            game.finish_figure_animation();
+        }
+        Scenario::AfterRecord => {
+            game.engine_mut().set_score(160);
+            game.finish_figure_animation();
+            game.start_new_game();
+            // The still frame shows both animations finished.
+            game.finish_figure_animation();
+        }
+        Scenario::NameEntry => {
+            game.engine_mut().set_score(42);
+            game.offer_name_entry();
         }
         Scenario::Stats => {
             game.engine_mut().new_game();
@@ -130,8 +166,12 @@ fn main() {
                 let (x, y) = layout.cell_origin(r, c);
                 rowline_core::input::Point::new(x as f32 + 18.0, y as f32 + 18.0)
             };
+            // The offline shot wants the dissolve, not a frozen mid-move:
+            // apply the engine move immediately, then restore animations.
+            game.toggle_reduced_motion();
             game.click_at(cell(5, 4), layout);
             game.click_at(cell(4, 4), layout);
+            game.toggle_reduced_motion();
         }
     }
 

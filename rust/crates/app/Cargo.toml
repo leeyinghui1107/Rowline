@@ -21,14 +21,38 @@ rowline-render.workspace = true
 rowline-assets.workspace = true
 winit = { version = "0.30", optional = true, default-features = false,
           features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }
-wgpu = { version = "30", optional = true, default-features = false,
-         features = ["wgsl", "dx12", "metal", "vulkan", "gles"] }
+
+# Only the backends the target platform actually needs.  Enabling every
+# backend in one build links four graphics HALs plus their shader compilers
+# into a single desktop game, which costs megabytes for no benefit.
+[target.'cfg(target_os = "windows")'.dependencies.wgpu]
+version = "30"
+optional = true
+default-features = false
+features = ["wgsl", "dx12"]
+
+[target.'cfg(target_os = "macos")'.dependencies.wgpu]
+version = "30"
+optional = true
+default-features = false
+features = ["wgsl", "metal"]
+
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies.wgpu]
+version = "30"
+optional = true
+default-features = false
+features = ["wgsl", "vulkan", "gles"]
 
 [features]
-default = ["gpu"]
+# The desktop product persists settings and scores; the original always did.
+default = ["gpu", "fs"]
 # GPU rendering via wgpu.
 gpu = ["rowline-render/wgpu", "rowline-render/text", "rowline-platform/winit", "dep:winit", "dep:wgpu"]
 # Software rendering via softbuffer (no GPU driver needed).
 software = ["rowline-render/softbuffer"]
 # Persist settings and scores to disk.
 fs = ["rowline-platform/fs", "rowline-storage/fs"]
+# Opt-in fallback backend for Windows machines without a DX12 driver (VMs,
+# very old GPUs).  Costs about 0.55 MB, so it is not on by default:
+#   cargo build --release -p rowline-app --features vulkan
+vulkan = ["wgpu/vulkan"]

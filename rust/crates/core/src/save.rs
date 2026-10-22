@@ -32,7 +32,7 @@ pub struct Settings {
     pub show_next: bool,
     pub show_statistics: bool,
     pub use_figures: bool,
-    /// The colour theme: `0` = dark, `1` = light.
+    /// The colour theme: `0` = dark, `1` = light, `2` = classic (default).
     pub theme: u8,
     /// `true` when the user asked for reduced motion.
     pub reduced_motion: bool,
@@ -45,17 +45,22 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
-            window_x: 0,
-            window_y: 0,
-            window_width: 1280,
-            window_height: 960,
+            // -1 = "no saved position": the app centres the window, as the
+            // original does when its INI has no WindowX/WindowY yet.
+            window_x: -1,
+            window_y: -1,
+            // The original's default outer size is 620x430, i.e. a 604x371
+            // client.  Rowline draws its menu inside the client, so the
+            // stored height includes the 20 px menu strip.
+            window_width: 604,
+            window_height: 396,
             window_maximized: false,
             show_next: true,
             // The original ships with ShowStatistics=0: the statistics
             // window is opt-in (F5 / 选项 · 显示统计).
             show_statistics: false,
             use_figures: false,
-            theme: 0,
+            theme: 2,
             reduced_motion: false,
             text_scale: 1,
             retro_mode: false,

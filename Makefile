@@ -5,10 +5,15 @@
 #   make app      : SDL2 application (requires SDL2 dev headers)
 #   make sheet    : regenerate the placeholder sprite sheet
 #   make test     : run the differential replay gate
+#   make package  : release build of the current platform + dist zip
+#   make dist     : same, plus GitHub Actions for the other platforms (if gh)
+#   make dist-ci  : build every platform on GitHub Actions
+#
+# On Windows all Python and cargo calls go through tools/win/*.ps1, so no
+# global PATH / RUSTUP_HOME setup is required (the WindowsApps `python.exe`
+# alias exits with 9009 -- the wrappers skip it).
 
 CC      ?= cc
-# The Python interpreter: Windows installs it as `python`, not `python3`.
-PYTHON  ?= python3
 CFLAGS  ?= -std=c99 -O2 -Wall -Wextra -Wno-unused-parameter
 SRC     := reference/c-impl
 BUILD   := build
@@ -16,10 +21,25 @@ BUILD   := build
 # On Windows every executable carries an .exe suffix, including the ones the
 # C compiler and cargo produce.  Without this the recipes below work under an
 # MSYS/Git-Bash shell but fail when make falls back to cmd.exe.
+#
+# Python: Windows does not ship `python3`, and the `python.exe` in
+# WindowsApps is a Store alias that exits with code 9009.  On Windows every
+# Python tool therefore goes through tools/win/py.ps1, which finds a real
+# interpreter; `make dist` goes straight to tools/build_all.ps1, which also
+# locates cargo (it is often installed outside PATH).
 ifeq ($(OS),Windows_NT)
 EXE     := .exe
+PY      := powershell -NoProfile -ExecutionPolicy Bypass -File tools/win/py.ps1
+CARGO   := powershell -NoProfile -ExecutionPolicy Bypass -File tools/win/cargo.ps1
+DIST    := powershell -NoProfile -ExecutionPolicy Bypass -File tools/build_all.ps1 --mode local
+DIST_CI := powershell -NoProfile -ExecutionPolicy Bypass -File tools/build_all.ps1 --mode ci
 else
 EXE     :=
+PYTHON  ?= python3
+PY      := "$(PYTHON)"
+CARGO   := cargo
+DIST    := "$(PYTHON)" tools/build_all.py
+DIST_CI := "$(PYTHON)" tools/build_all.py --mode ci
 endif
 
 # ------------------------------------------------------------------ replay
@@ -56,7 +76,7 @@ endif
 SDL_CFLAGS ?= $(shell sdl2-config --cflags 2>/dev/null)
 SDL_LIBS   ?= $(shell sdl2-config --libs 2>/dev/null || echo -lSDL2)
 
-.PHONY: all replay app check layout-check rust rust-test sheet icons package shot test clean
+.PHONY: all replay app check layout-check rust rust-test sheet icons package dist dist-ci shot test clean
 
 all: replay check
 
@@ -80,10 +100,10 @@ layout-check: $(CHECK_BIN)
 
 # ------------------------------------------------------------------ rust
 rust:
-	cd $(RUST_DIR) && cargo build --release
+	cd $(RUST_DIR) && $(CARGO) build --release
 
 rust-test:
-	cd $(RUST_DIR) && cargo test --release
+	cd $(RUST_DIR) && $(CARGO) test --release
 
 app: $(APP_BIN)
 
@@ -91,19 +111,31 @@ $(APP_BIN): $(APP_SRC) $(SRC)/wl_model.h $(SRC)/wl_layout.h $(SRC)/wl_render.h |
 	$(CC) $(CFLAGS) -I$(SRC) $(SDL_CFLAGS) -o $@ $(APP_SRC) $(SDL_LIBS)
 
 $(SHOT_BIN):
-	cd $(RUST_DIR) && cargo build --release -p rowline-tools
+	cd $(RUST_DIR) && $(CARGO) build --release -p rowline-tools
 
 $(BUILD):
-	"$(PYTHON)" -c "import os; os.makedirs(r'$(BUILD)', exist_ok=True)"
+	$(PY) -c "import os; os.makedirs(r'$(BUILD)', exist_ok=True)"
 
 sheet:
-	"$(PYTHON)" tools/make_sheet.py
+	$(PY) tools/make_sheet.py
 
 icons:
-	"$(PYTHON)" tools/make_icons.py
+	$(PY) tools/make_icons.py
 
+# Package the current platform (rebuilds the release binary, adds a zip).
 package:
-	"$(PYTHON)" tools/package.py
+	$(DIST)
+
+# Three-platform build.  The host is built locally; the other platforms are
+# built on native GitHub Actions runners (see .github/workflows/release.yml).
+#
+#   make dist      host locally + GitHub Actions for the rest when `gh` exists
+#   make dist-ci   every platform on GitHub Actions (needs `gh` + a pushed commit)
+dist:
+	$(DIST)
+
+dist-ci:
+	$(DIST_CI)
 
 # Render a frame into a PNG without a GPU or a display.
 shot: $(SHOT_BIN)
@@ -113,8 +145,8 @@ shot: $(SHOT_BIN)
 test: $(REPLAY_BIN) $(CHECK_BIN)
 	$(CHECK_BIN)
 	@echo "$(if $(RUST_GATE),--- four-way differential gate (python / c / rust / golden) ---,--- rust not built; run 'make rust' for the four-way gate ---)"
-	"$(PYTHON)" tools/replay/diff_replay.py --all
+	$(PY) tools/replay/diff_replay.py --all
 
 clean:
-	"$(PYTHON)" -c "import shutil; shutil.rmtree(r'$(BUILD)', ignore_errors=True)"
-	cd $(RUST_DIR) && cargo clean
+	$(PY) -c "import shutil; shutil.rmtree(r'$(BUILD)', ignore_errors=True)"
+	cd $(RUST_DIR) && $(CARGO) clean

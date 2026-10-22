@@ -87,6 +87,11 @@ impl SoftwareCanvas {
 
     /// Where the content is drawn inside the target, in physical pixels.
     pub fn set_viewport(&mut self, rect: Rect, content_scale: f32) {
+        if (self.content_scale - content_scale).abs() > 1e-4 {
+            // Glyph atlases bake the device pixel ratio into their
+            // rasterisation, so a DPR change invalidates every cached size.
+            self.fonts.clear();
+        }
         self.content_rect = rect;
         self.content_scale = content_scale;
     }
@@ -242,8 +247,11 @@ impl SoftwareCanvas {
     }
 
     fn frame(&mut self, x: i32, y: i32, w: i32, h: i32, style: FrameStyle) {
-        let (light, dark) = match style {
-            FrameStyle::Sunken => (Color::rgb(255, 255, 255), Color::rgb(128, 128, 128)),
+        // `top` is the top/left edge, `bottom` the bottom/right one.  Raised
+        // catches the light on the top/left, sunken on the bottom/right --
+        // the same mapping as the GPU backend.
+        let (top, bottom) = match style {
+            FrameStyle::Sunken => (Color::rgb(128, 128, 128), Color::rgb(255, 255, 255)),
             FrameStyle::Raised => (Color::rgb(255, 255, 255), Color::rgb(128, 128, 128)),
             FrameStyle::Flat => (Color::rgb(128, 128, 128), Color::rgb(128, 128, 128)),
         };
@@ -255,11 +263,10 @@ impl SoftwareCanvas {
         let w = (w as f32 * k).max(1.0) as i32;
         let h = (h as f32 * k).max(1.0) as i32;
         let t = k.max(1.0) as i32;
-        // top + left in `dark`, bottom + right in `light` (sunken look)
-        self.fill_rect(x, y, w, t, dark);
-        self.fill_rect(x, y + h - t, w, t, light);
-        self.fill_rect(x, y, t, h, dark);
-        self.fill_rect(x + w - t, y, t, h, light);
+        self.fill_rect(x, y, w, t, top);
+        self.fill_rect(x, y + h - t, w, t, bottom);
+        self.fill_rect(x, y, t, h, top);
+        self.fill_rect(x + w - t, y, t, h, bottom);
     }
 
     /// The icon atlas: a horizontal strip of square cells.
@@ -410,10 +417,28 @@ impl SoftwareCanvas {
         };
         let dpr = self.content_scale;
         let key = size.max(1) as u32;
-        let atlas = self.fonts.entry(key).or_insert_with(|| {
-            crate::font::FontAtlas::new(bytes.clone(), size.max(1) as f32, dpr)
-                .unwrap_or_else(|_| crate::font::FontAtlas::new(Vec::new(), 1.0, 1.0).unwrap())
-        });
+        if let std::collections::hash_map::Entry::Vacant(entry) = self.fonts.entry(key) {
+            match crate::font::FontAtlas::new(bytes, size.max(1) as f32, dpr) {
+                Ok(atlas) => {
+                    entry.insert(atlas);
+                }
+                Err(e) => {
+                    // Never panic on a diagnostics write: this renderer is
+                    // also linked into the GUI-subsystem application.
+                    {
+                        use std::io::Write as _;
+                        let _ =
+                            writeln!(std::io::stderr(), "rowline: cannot rasterise the font: {e}");
+                    }
+                    self.draw_text_marker(text, at, size, color);
+                    return;
+                }
+            }
+        }
+        let Some(atlas) = self.fonts.get_mut(&key) else {
+            self.draw_text_marker(text, at, size, color);
+            return;
+        };
         let k = self.content_scale;
         // `at` is the top-left of the line, the glyph offsets are measured
         // from the baseline, so the ascent has to be added.

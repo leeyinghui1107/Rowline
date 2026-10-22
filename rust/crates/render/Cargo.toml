@@ -25,11 +25,25 @@ image = ["dep:image"]
 # Deterministic text rendering for the software backend.
 text = ["dep:ab_glyph", "image"]
 
-[dependencies.wgpu]
+# One backend set per target; see the note in rowline-app's manifest.  Both
+# manifests must agree, because Cargo unions the features of a dependency.
+[target.'cfg(target_os = "windows")'.dependencies.wgpu]
 version = "30"
 optional = true
 default-features = false
-features = ["wgsl", "dx12", "metal", "vulkan", "gles"]
+features = ["wgsl", "dx12"]
+
+[target.'cfg(target_os = "macos")'.dependencies.wgpu]
+version = "30"
+optional = true
+default-features = false
+features = ["wgsl", "metal"]
+
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies.wgpu]
+version = "30"
+optional = true
+default-features = false
+features = ["wgsl", "vulkan", "gles"]
 
 [dependencies.pollster]
 version = "1"

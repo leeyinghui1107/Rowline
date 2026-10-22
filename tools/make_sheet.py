@@ -99,6 +99,33 @@ def shade(c, f):
     return (max(0, min(255, int(c[0]*f))), max(0, min(255, int(c[1]*f))), max(0, min(255, int(c[2]*f))))
 
 
+def draw_cell(cv, x0, y0, cell, scale):
+    """The empty-cell tile: the original's Win95 bevel.
+
+    Layout of one 36 px slot at @1x (verified against the original atlas):
+
+        x=0,1 / y=0,1     white highlight
+        x=2..33 / y=2..33 #C0C0C0 plate
+        x=34 / y=34       #292929 shadow
+        x=35 / y=35       black gap (forms the grid line)
+    """
+    white = (255, 255, 255)
+    shadow = (41, 41, 41)
+    black = (0, 0, 0)
+    hi = 2 * scale
+    for y in range(cell):
+        for x in range(cell):
+            if x == cell - 1 or y == cell - 1:
+                c = black
+            elif x < hi or y < hi:
+                c = white
+            elif x >= cell - hi or y >= cell - hi:
+                c = shadow
+            else:
+                c = BG
+            cv.set(x0 + x, y0 + y, c)
+
+
 def draw_sphere(cv, cx, cy, rad, col):
     """Sphere with a highlight and a rim shadow.
 
@@ -175,23 +202,20 @@ def build_sheet(scale=1):
     cv = Canvas(W1 * scale, H1 * scale)
     for col in range(16):
         x0, y0 = cell_origin(col, scale)
-        # empty-cell tile (columns 0 and 8)
+        # Every slot carries the beveled plate, including the ball slots:
+        # the original draws the ball on top of the cell tile.
+        draw_cell(cv, x0, y0, CELL, scale)
         if col in (0, 8):
-            for y in range(y0, y0+CELL):
-                for x in range(x0, x0+CELL):
-                    edge = (x < x0+scale or y < y0+scale
-                            or x >= x0+CELL-scale or y >= y0+CELL-scale)
-                    cv.set(x, y, (160, 160, 160) if edge else BG)
             continue
         if col <= 7:
             c = COLORS[col-1]
-            # A 32 px ball inside the 36 px cell: radius 16 reaches the
-            # 2 px inset on both sides.  The half-pixel centre keeps the
-            # rim symmetric inside the 32 px slot.
-            draw_sphere(cv, x0 + CELL/2 - 0.5, y0 + CELL/2 - 0.5, SPRITE/2, c)
+            # A 30 px ball inside the 32 px plate (one pixel of margin), as
+            # in the original.  The half-pixel centre keeps the rim centred.
+            draw_sphere(cv, x0 + CELL/2 - 0.5, y0 + CELL/2 - 0.5,
+                        SPRITE/2 - scale, c)
         else:
             c = COLORS[col-9]
-            draw_poly(cv, x0+CELL//2, y0+CELL//2, max(1, SPRITE//2 - 2*scale),
+            draw_poly(cv, x0+CELL//2, y0+CELL//2, max(1, SPRITE//2 - 3*scale),
                       c, SHAPES[col-9])
     return cv
 

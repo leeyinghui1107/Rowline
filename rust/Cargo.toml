@@ -33,7 +33,13 @@ rowline-app = { path = "crates/app" }
 #   * the differential replay gate must stay hermetic and reproducible
 #   * the logic must be portable to no_std and to embedded targets later
 #   * the behaviour spec (docs/03_FEATURE_SPEC.md) is the only contract
+# The product is a single desktop binary: optimise it for size.  "z" shrinks
+# the wgpu/naga code much further than 3; the game is not CPU bound, so the
+# small speed cost is irrelevant.  Fat LTO removes dead cross-crate code and
+# stripping drops the symbol table.
 [profile.release]
-opt-level = 3
-lto = true
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
 panic = "abort"
+strip = "symbols"

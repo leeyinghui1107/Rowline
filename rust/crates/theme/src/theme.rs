@@ -109,8 +109,20 @@ impl DesignSystem {
     }
 
     /// The corner radius.
+    ///
+    /// The classic theme reproduces the original's square Win95 controls, so
+    /// every requested radius collapses to zero.
     pub fn radius(&self, r: Radius) -> f32 {
-        r.px()
+        if self.is_classic() {
+            0.0
+        } else {
+            r.px()
+        }
+    }
+
+    /// `true` for the original Win95 look.
+    pub fn is_classic(&self) -> bool {
+        self.palette.kind == ThemeKind::Classic
     }
 }
 
@@ -127,6 +139,17 @@ mod tests {
         assert_eq!(ds.kind(), ThemeKind::Light);
         assert!(ds.motion.reduced);
         assert_eq!(ds.tokens.text_scale, TextScale::Large);
+    }
+
+    #[test]
+    fn the_classic_theme_is_square_and_the_others_are_not() {
+        let classic = DesignSystem::new(ThemeKind::Classic, false);
+        assert!(classic.is_classic());
+        assert_eq!(classic.radius(Radius::Lg), 0.0);
+        assert_eq!(classic.radius(Radius::Pill), 0.0);
+        let dark = DesignSystem::new(ThemeKind::Dark, false);
+        assert!(!dark.is_classic());
+        assert!(dark.radius(Radius::Lg) > 0.0);
     }
 
     #[test]

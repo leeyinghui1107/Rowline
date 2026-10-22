@@ -46,11 +46,12 @@
 ├── assets/
 │   ├── sheet/                自制精灵图集 @1x/@2x/@3x/@4x
 │   ├── icons/                自制图标 @1x/@2x/@3x/@4x + SVG 源
-│   ├── noise/                自制噪点纹理
+│   ├── noise/                自制噪点纹理（仅设计稿，运行时不加载）
 │   ├── png/ resources/       ⚠️ 从原作 EXE 提取的受版权保护资产，已 .gitignore 隔离
+│   （发布包只带 assets/sheet 与 assets/icons 的 PNG；BMP/SVG/guide 属制作材料）
 ├── analysis/                 静态分析产物
 ├── blackbox/                 采集清单与证据
-└── .github/workflows/ci.yml  CI
+└── .github/workflows/         ci.yml（测试矩阵） · release.yml（三平台发布构建）
 ```
 
 ## 快速开始
@@ -62,8 +63,29 @@ make test       # 布局门 + 四方差分门（Python / C / Rust / golden）
 make app        # SDL2 应用（需要 SDL2）
 make sheet      # 重新生成精灵图集
 make icons      # 重新生成图标与噪点
-make package    # 打包当前平台
+make package    # 编译 release 并打包当前平台（dist/*.zip）
+make dist       # 同上；检测到 gh 时再构建其余平台
+make dist-ci    # 三平台全部由 GitHub Actions 构建并下载到 dist/
 ```
+
+> **Windows 无需先配环境**：`make` 在 Windows 上把 Python 交给
+> `tools/win/py.ps1`、把 cargo 交给 `tools/win/cargo.ps1`，两者都会自动定位
+> 真实解释器/工具链（应用商店的 `python.exe` 占位符会以 9009 退出，已被跳过）。
+> `make dist` 直接调用 `tools/build_all.ps1`。
+>
+> 直接打包也可以：
+>
+> ```powershell
+> powershell -NoProfile -ExecutionPolicy Bypass -File tools\build_all.ps1 --mode local
+> ```
+
+> **三平台构建**：`tools/build_all.py` 会在本机构建宿主平台；当请求其它平台时，
+> 它会触发 `.github/workflows/release.yml`，由 GitHub 的原生 runner 分别构建
+> Linux、macOS（Intel + Apple Silicon 通用二进制）和 Windows，完成后下载到 `dist/`。
+> CI 构建的是**已推送的提交**，工作区有未提交改动时脚本会拒绝运行（可用
+> `--allow-dirty` 跳过检查）。`gh` 未安装时自动降级为仅构建宿主平台。
+> 可先用 `python tools/build_all.py --list` 查看计划；Windows 下如果 `python`
+> 是应用商店占位符，使用 `powershell -NoProfile -ExecutionPolicy Bypass -File tools\build_all.ps1 --list`。
 
 离线出图（不需要 GPU / 显示器，用于视觉复核）：
 
@@ -78,7 +100,7 @@ Rust 侧：
 ```bash
 cd rust
 cargo build --release --workspace --all-features
-cargo test --release --workspace --all-features     # 140 项（含 doc-test）
+cargo test --release --workspace --all-features     # 165 项（含 doc-test）
 cargo clippy --workspace --all-features -- -D warnings
 ```
 
@@ -99,6 +121,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\win\verify.ps1
 
 ## 关键结论速览
 
+- **默认外观 = 原作 Classic**：`#F0F0F0` 菜单/HUD、黑色棋盘区、`#C0C0C0`
+  Win95 立体格、原作 7 色球；默认窗口为 **604×396 客户区**（372 内容 +
+  20 自绘菜单 + 4 底部边框预留；原作外层 620×430、客户区 604×371），
+  屏幕居中，几何随存档恢复；HiDPI 输入按 `Viewport` 反算为逻辑坐标（200% 实机验证）
+- **角色高度 = 分数**：左右同一比例尺（记录 = 整列 2/3），挑战者随本局分数升高、
+  超过记录时高于国王并在 150% 封顶；新纪录后按新比例重算，国王“降到 0 再升起”、
+  挑战者同时回落（详见 docs/03 §3.1b）
+- **发布体积**：Windows 单文件 **2.84 MB**（`opt-level="z"` + fat LTO + strip，
+  wgpu 只链接各平台所需后端；zip 约 1.53 MB）。无 DX12 的机器（部分虚拟机/
+  老显卡）可用 `cargo build --release -p rowline-app --features vulkan` 一并链接 Vulkan
 - **原生 Win32 C/C++**（Borland/Turbo 链接器 2.18），32 位 x86，**无壳、无混淆、无 .NET、无游戏引擎**
 - **99.2% 体积是 PE 资源段**，熵仅 3.10 → 资产**未压缩未加密，已 100% 提取**
 - 棋盘（已确认）：**9×9 = 81 格**，行主序字节数组，格字节低 6 位有效，**7 色**，**消除阈值 = 5**
