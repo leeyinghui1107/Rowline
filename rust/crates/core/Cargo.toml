@@ -8,11 +8,8 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-# Optional, derive-only: the crate stays dependency-free by default, which
-# keeps the differential replay gate hermetic.
-serde = { version = "1", features = ["derive"], optional = true }
+# Intentionally empty: the differential replay gate must stay hermetic and
+# the crate must remain portable to no_std targets.
 
 [features]
 default = []
-# Serialisation support for the save model.
-serde = ["dep:serde"]

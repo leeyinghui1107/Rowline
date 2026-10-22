@@ -175,6 +175,66 @@ pub fn variant_name(base: &str, scale: u32) -> String {
     }
 }
 
+// ---------------------------------------------------------------- embedded
+//
+// The product ships as a **single executable**: the sprite sheet and the
+// icon strip are compiled into it, so there is no `assets/` directory to
+// lose, copy or tamper with.  The PNGs are already compressed; embedding
+// them costs about 190 KB of binary size.
+
+/// The sprite-sheet variants compiled into the binary.
+pub const EMBEDDED_SHEET_SCALES: [u32; 4] = [1, 2, 3, 4];
+
+/// The icon-strip variants compiled into the binary.
+pub const EMBEDDED_ICON_SCALES: [u32; 4] = [1, 2, 3, 4];
+
+/// The embedded sprite sheet at `scale`, if that variant exists.
+pub fn embedded_sheet(scale: u32) -> Option<&'static [u8]> {
+    match scale {
+        1 => Some(include_bytes!("../../../../assets/sheet/rowline_sheet.png")),
+        2 => Some(include_bytes!(
+            "../../../../assets/sheet/rowline_sheet@2x.png"
+        )),
+        3 => Some(include_bytes!(
+            "../../../../assets/sheet/rowline_sheet@3x.png"
+        )),
+        4 => Some(include_bytes!(
+            "../../../../assets/sheet/rowline_sheet@4x.png"
+        )),
+        _ => None,
+    }
+}
+
+/// The embedded icon strip at `scale`, if that variant exists.
+pub fn embedded_icons(scale: u32) -> Option<&'static [u8]> {
+    match scale {
+        1 => Some(include_bytes!("../../../../assets/icons/icons.png")),
+        2 => Some(include_bytes!("../../../../assets/icons/icons@2x.png")),
+        3 => Some(include_bytes!("../../../../assets/icons/icons@3x.png")),
+        4 => Some(include_bytes!("../../../../assets/icons/icons@4x.png")),
+        _ => None,
+    }
+}
+
+/// Decode an embedded sprite sheet.
+pub fn embedded_sheet_image(scale: u32) -> Result<SpriteSheet, AssetError> {
+    let bytes = embedded_sheet(scale)
+        .ok_or_else(|| AssetError::NotFound(format!("embedded sheet @{scale}x")))?;
+    let image = decode_png(bytes)?;
+    Ok(SpriteSheet::new(image, GridSpec::ORIGINAL, scale))
+}
+
+/// Decode an icon strip held in memory.
+pub fn load_icon_strip_bytes(bytes: &[u8], count: u32) -> Result<IconStrip, AssetError> {
+    let image = decode_png(bytes)?;
+    Ok(IconStrip {
+        width: image.width(),
+        height: image.height(),
+        count: if count == 0 { 0 } else { count },
+        pixels: image.into_raw(),
+    })
+}
+
 /// Decode a PNG into an RGBA8 image.
 pub fn decode_png(bytes: &[u8]) -> Result<RgbaImage, AssetError> {
     image::load_from_memory_with_format(bytes, image::ImageFormat::Png)
@@ -217,14 +277,7 @@ impl IconStrip {
 pub fn load_icon_strip(path: &Path, count: u32) -> Result<IconStrip, AssetError> {
     let bytes =
         std::fs::read(path).map_err(|e| AssetError::Io(format!("{}: {e}", path.display())))?;
-    let img = decode_png(&bytes)?;
-    let count = if count == 0 { 0 } else { count };
-    Ok(IconStrip {
-        width: img.width(),
-        height: img.height(),
-        count,
-        pixels: img.into_raw(),
-    })
+    load_icon_strip_bytes(&bytes, count)
 }
 
 /// Resolve a usable system font.

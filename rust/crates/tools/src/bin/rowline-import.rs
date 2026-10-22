@@ -61,7 +61,7 @@ fn main() -> ExitCode {
     };
 
     let data = legacy::to_save(records.clone(), Settings::default());
-    let format = rowline_storage::RonFormat;
+    let format = rowline_storage::TextFormat;
     let bytes = match rowline_core::save::SaveFormat::encode(&format, &data) {
         Ok(b) => b,
         Err(e) => {

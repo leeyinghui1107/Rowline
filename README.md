@@ -48,7 +48,7 @@
 │   ├── icons/                自制图标 @1x/@2x/@3x/@4x + SVG 源
 │   ├── noise/                自制噪点纹理（仅设计稿，运行时不加载）
 │   ├── png/ resources/       ⚠️ 从原作 EXE 提取的受版权保护资产，已 .gitignore 隔离
-│   （发布包只带 assets/sheet 与 assets/icons 的 PNG；BMP/SVG/guide 属制作材料）
+│   （sheet/icons 的 PNG 在编译时用 include_bytes! 编入可执行文件，发布只有一个 exe）
 ├── analysis/                 静态分析产物
 ├── blackbox/                 采集清单与证据
 └── .github/workflows/         ci.yml（测试矩阵） · release.yml（三平台发布构建）
@@ -100,7 +100,7 @@ Rust 侧：
 ```bash
 cd rust
 cargo build --release --workspace --all-features
-cargo test --release --workspace --all-features     # 165 项（含 doc-test）
+cargo test --release --workspace --all-features     # 166 项（含 doc-test）
 cargo clippy --workspace --all-features -- -D warnings
 ```
 
@@ -128,8 +128,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\win\verify.ps1
 - **角色高度 = 分数**：左右同一比例尺（记录 = 整列 2/3），挑战者随本局分数升高、
   超过记录时高于国王并在 150% 封顶；新纪录后按新比例重算，国王“降到 0 再升起”、
   挑战者同时回落（详见 docs/03 §3.1b）
-- **发布体积**：Windows 单文件 **2.84 MB**（`opt-level="z"` + fat LTO + strip，
-  wgpu 只链接各平台所需后端；zip 约 1.53 MB）。无 DX12 的机器（部分虚拟机/
+- **单文件发布**：素材编入 exe，**2.93 MB**，无需 `assets/` 目录；`opt-level="z"` +
+  fat LTO + strip + 按平台裁剪后端 + 自写文本存档。无 DX12 的机器（部分虚拟机/
   老显卡）可用 `cargo build --release -p rowline-app --features vulkan` 一并链接 Vulkan
 - **原生 Win32 C/C++**（Borland/Turbo 链接器 2.18），32 位 x86，**无壳、无混淆、无 .NET、无游戏引擎**
 - **99.2% 体积是 PE 资源段**，熵仅 3.10 → 资产**未压缩未加密，已 100% 提取**

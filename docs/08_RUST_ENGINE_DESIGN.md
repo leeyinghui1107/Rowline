@@ -13,7 +13,7 @@
 | **渲染** | **wgpu 30**（主）+ **softbuffer 0.4**（次） | wgpu 覆盖 Vulkan/Metal/DX12/GL/Web，一套 WGSL 着色器跑所有平台；**softbuffer 作为"像素级参考实现"**，用于 CI 无 GPU 环境与双后端差分 | ❌ 只用 wgpu：CI/无显卡机器无法跑；❌ `macroquad`：抽象太厚，无法控制 36 px 网格的像素对齐；❌ `egui`：本作 UI 极简（一个分数 + 一个预览），全量引入不划算 |
 | **音频** | **rodio 0.23**（可选 feature） | 纯 Rust、跨平台、基于 `cpal` | ⚠️ **原作完全无音频**（已确认）。因此音频是**新增功能**而非复刻项，默认关闭；仅当需要时才引入 `rodio`（其底层即 `cpal`） |
 | **UI 框架** | **不用** egui/iced | 本作 UI = 一个棋盘 + 一个侧栏 + 几个按钮，**egui/iced 的即时模式对 2D 网格游戏是负担**（额外依赖、额外布局层、难以做像素级对齐） | ❌ egui：适合工具型 UI，不适合帧同步的网格游戏；❌ iced：MVVM 架构与游戏循环模型不匹配 |
-| **资源** | **image 0.25** + **serde 1** + **ron 0.12** | `image` 解 PNG/BMP；`ron` 是可读、可手改、可 diff 的存档格式（**不复制原作的 XOR 混淆**，见 `docs/04` P-04） | ❌ `bincode`：不可读，破坏"用户能自己改存档"；❌ 直接用 `serde_json`：RON 保留注释，更适合配置 |
+| **资源** | **image 0.25**（仅 png） | `image` 解 PNG；图集与图标通过 `include_bytes!` 编入可执行文件 | ❌ serde/ron：为 12 个设置与 16 行榜单引入的通用序列化库，已由约 150 行手写文本格式替代 |
 | **随机** | **不引入 `rand`** | 原作的 Borland LCG 必须**逐位复刻**才能做行为差分（见 `docs/03` S10），`rand` 的算法不可控 | ❌ `rand`：无法与原作对齐 |
 | **数学** | 自带 `Point`/`Size`/`Rect`/`Color` | `core` 保持**零依赖**；`glam` 只在 wgpu 后端里用 | ⚠️ `glam` 在渲染层是合理的，但不该进 `core` |
 

@@ -12,7 +12,6 @@
 
 /// One high-score entry.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ScoreRecord {
     /// Player name, at most 28 bytes in the legacy layout.
     pub name: String,
@@ -22,7 +21,6 @@ pub struct ScoreRecord {
 
 /// The persisted settings.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Settings {
     pub window_x: i32,
     pub window_y: i32,
@@ -70,7 +68,6 @@ impl Default for Settings {
 
 /// Everything that gets persisted.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SaveData {
     /// Format version, so future readers can migrate.
     pub version: u32,

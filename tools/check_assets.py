@@ -113,7 +113,10 @@ def compare(path):
     ours = open(current, "rb").read()
     theirs = head_bytes(path)
     if path.endswith(".svg"):
-        return None if ours == theirs else "SVG text differs"
+        # The checkout may use CRLF while `git show` yields the LF blob.
+        def norm(b):
+            return b.replace(b"\r\n", b"\n")
+        return None if norm(ours) == norm(theirs) else "SVG text differs"
     if not path.endswith(".png"):
         return None if ours == theirs else "file differs"
     a = decode_png(ours)

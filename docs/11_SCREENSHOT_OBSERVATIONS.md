@@ -429,7 +429,7 @@ logical = (physical - content_rect.origin) / content_scale
 | 34 | **对比度**：`下组/颜色` 与总榜空行改为 `#606060`（AA 5.2:1），隔行 `#E4E4E4`，角色加深并加圆角描边 | `theme::Palette::CLASSIC` / `one_figure` | ✅ 已做 |
 | 35 | **发布版无控制台**：`windows_subsystem = "windows"`（release），诊断输出改为不 panic 的 `note!` | `app::main` / `render::canvas` | ✅ 已做（PE Subsystem=GUI，实测无 conhost） |
 | 36 | **棋盘结束在窗口下边框之上**：布局预留 4 px，默认客户区 604×396 | `core::layout::{FRAME_RESERVE, compute_framed}` | ✅ 已做（像素核对：棋盘底 390，边框 393–395） |
-| 37 | **发布体积**：7.32 MB → **2.84 MB**（zip 1.53 MB）。`opt-level="z"` + fat LTO + `codegen-units=1` + `strip`；按平台只链接所需后端；打包用默认特性；Vulkan 改为可选 feature `vulkan` | `Cargo.toml` profiles / target features / `package.py` | ✅ 已做（Windows 默认 DX12；macOS Metal；Linux Vulkan+GL） |
+| 37 | **单文件发布 + 体积**：7.32 MB → **2.93 MB**，素材内嵌、无外部目录；`opt-level="z"` + fat LTO + strip + 按平台裁剪后端 + 自写文本存档（去掉 serde/ron） | `embedded_*` / `Cargo.toml` / `package.py` | ✅ 已做（空目录只放 exe 实测可运行） |
 | 38 | **角色高度 = 分数（同一比例尺）**：`height(score) = score / (1.5 × 记录) × 150 px`；两侧同分同高 | `score_to_height` | ✅ 已做（回归测试） |
 | 39 | **破纪录过程中**：左侧记录分与国王高度保持不变，只有右侧挑战者的分数与高度继续增长，最高到 150% | `Game::king_score` / `update_figure_targets` | ✅ 已做（`--scenario record`） |
 | 40 | **新纪录重算比例**：新局开始时按新记录重算；国王先从当前高度降到 0、再升到新比例高度（450 + 550 ms，制造“增长”观感），挑战者同时从当前高度回落到 0；左侧计分同步 0 → 新记录 | `ScaleReset` / `displayed_king_score` | ✅ 已做（回归测试 + `--scenario afterrecord`） |

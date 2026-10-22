@@ -1,7 +1,7 @@
 # 06 · 实施状态
 
 > 对照 `docs/04_FIDELITY_MATRIX.md` 的 M1–M6 里程碑。
-> 最近一次全量验证：**Rust 165 项测试通过 · 零编译警告 · clippy `-D warnings --all-targets` 通过 · 四方差分门 ALL MATCH · 布局门 PASSED · 200% DPI 实机点击/换选/移动/动画通过**。
+> 最近一次全量验证：**Rust 166 项测试通过 · 零编译警告 · clippy `-D warnings --all-targets` 通过 · 四方差分门 ALL MATCH · 布局门 PASSED · 200% DPI 实机点击/换选/移动/动画通过**。
 
 ---
 
@@ -42,7 +42,7 @@
 | `core` | 棋盘 · 规则 · RNG · 布局 · 引擎 · 输入 · 渲染指令 · 视图 · 状态 · 存档 · 菜单 · 特效 | **零依赖** | 68 |
 | `display` | 视口计算 · Lanczos-3 重采样 · 变体选择 | core | 11 |
 | `theme` | Classic/Dark/Light 色板 · 8pt 栅格 · 字阶 · 缓动 · 减少动效 · WCAG 对比度断言 | core | 27 |
-| `storage` | RON 存档 · 文件存储 · 原作榜单导入 | core · platform · ron | 6 |
+| `storage` | 文本存档（save.txt） · 文件存储 · 原作榜单导入 | core · platform | 7 |
 | `platform` | 窗口事件 · 时钟 · 文件系统抽象 | core | 1 |
 | `render` | Renderer trait · wgpu 后端 · softbuffer 后端 · 动态字形图集 | core · assets | 10 |
 | `assets` | 精灵图集 · 图标条 · 变体命名 · 系统字体解析 | core · display · image | 4 |
@@ -97,7 +97,8 @@
 | Cargo workspace（9 crate） | ✅ | `rust/` |
 | Makefile（replay / check / rust / app / sheet / icons / test / package / dist / dist-ci） | ✅ | `Makefile` |
 | **Windows 工具链包装器**：自动定位真实 Python（跳过应用商店占位符 9009）与自定义 CARGO_HOME 下的 cargo | ✅ | `tools/win/py.ps1` · `tools/win/cargo.ps1` |
-| **发布体积**：Windows 单文件 **2.84 MB**（zip 1.53 MB）；`opt-level="z"` + fat LTO + strip + 按平台裁剪 wgpu 后端 | ✅ | `rust/Cargo.toml` · `crates/*/Cargo.toml` · `tools/package.py` |
+| **单文件发布**：精灵图集与图标编译进 exe，无需 `assets/` 目录；Windows 单文件 **2.93 MB**（zip 单文件） | ✅ | `rowline_assets::embedded_*` · `tools/package.py` |
+| **体积**：`opt-level="z"` + fat LTO + strip + 按平台裁剪 wgpu 后端 + 去掉 serde/ron | ✅ | `rust/Cargo.toml` · `crates/*/Cargo.toml` |
 | **可选 Vulkan 回退**（无 DX12 的虚拟机/老显卡） | ✅ | `cargo build --features vulkan` |
 | CMakeLists（C 对照实现） | ✅ | `reference/c-impl/CMakeLists.txt` |
 | GitHub Actions（rust / C / 差分门 / 资产可复现） | ✅ | `.github/workflows/ci.yml` |
@@ -117,7 +118,7 @@
 | **M1 静态帧** | ✅ | 布局门 6 种尺寸全过；精灵索引公式与原作一致 |
 | **M2 输入** | ✅ | 点击选球 → 落子 → 消除；菜单优先于棋盘；物理→逻辑坐标换算（HiDPI） |
 | **M3 核心玩法** | ✅ | 规则语义已由反汇编 + 实机定标；四方差分门 `ALL MATCH` |
-| **M4 持久化** | ✅ | RON 存档 + 设置 + 高分榜 + 窗口几何；默认 feature 启用 `fs`；原作注册表导入器（`rowline-import`） |
+| **M4 持久化** | ✅ | 手写文本存档（`save.txt`）+ 设置 + 高分榜 + 窗口几何；默认 feature 启用 `fs`；原作注册表导入器（`rowline-import`） |
 | **M5 表现** | ✅ | **Classic 默认主题**（Win95 配色/立体边/顶部 HUD/自绘菜单）· 深/浅可选 · 粒子 · 动画 · @1x–@4x · 减少动效 |
 | **截图对齐** | ✅ | 按 `docs/11` 修正：HUD 顶部横栏 · 下一组 3 颗球 · 黑底浅灰立体格 · 结束对话框 · 默认 604×396 客户区 |
 | **M6 交付** | ✅ | CI 三平台 + 资产可复现校验 + 打包脚本 + 三平台发布工作流 |

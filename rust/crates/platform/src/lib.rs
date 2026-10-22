@@ -231,7 +231,7 @@ mod tests {
     #[test]
     fn memory_fs_round_trips() {
         let mut fs = MemoryFileSystem::new();
-        let p = Path::new("/app/save.ron");
+        let p = Path::new("/app/save.txt");
         assert!(!fs.exists(p));
         fs.write(p, b"hello").unwrap();
         assert!(fs.exists(p));

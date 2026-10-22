@@ -16,7 +16,6 @@
 use std::path::PathBuf;
 
 use rowline_app::game::{frame, Game};
-use rowline_assets::AssetLoader;
 use rowline_core::layout::Layout;
 use rowline_core::RuleModel;
 use rowline_render::canvas::SoftwareCanvas;
@@ -216,32 +215,29 @@ fn main() {
 
 /// The sprite sheet, at the best variant for the scale.
 fn load_sheet(scale: f32) -> Option<(image::RgbaImage, u32)> {
-    for root in ["assets", "../assets", "../../assets"] {
-        let mut loader = rowline_assets::FileAssetLoader::new(root);
-        if let Ok(sheet) = loader.load_sheet(
-            &rowline_assets::AssetKey::SpriteSheet,
-            rowline_assets::GridSpec::ORIGINAL,
-            scale,
-        ) {
-            return Some((sheet.image().clone(), sheet.scale()));
+    // The same embedded atlas the application uses: the shot tool works
+    // from any directory and needs no assets folder.
+    let variant =
+        rowline_display::select_variant(&rowline_assets::EMBEDDED_SHEET_SCALES, scale).unwrap_or(1);
+    match rowline_assets::embedded_sheet_image(variant) {
+        Ok(sheet) => Some((sheet.image().clone(), sheet.scale())),
+        Err(e) => {
+            eprintln!("rowline-shot: cannot decode the sprite sheet: {e}");
+            None
         }
     }
-    eprintln!("rowline-shot: the sprite sheet is missing; run 'make sheet'");
-    None
 }
 
 /// The icon atlas.
 fn load_icons() -> Option<rowline_assets::IconStrip> {
-    for dir in ["assets/icons", "../assets/icons", "../../assets/icons"] {
-        for name in ["icons@4x.png", "icons@3x.png", "icons@2x.png", "icons.png"] {
-            let p = std::path::Path::new(dir).join(name);
-            if p.exists() {
-                if let Ok(strip) =
-                    rowline_assets::load_icon_strip(&p, rowline_app::commands::ICON_COUNT)
-                {
-                    return Some(strip);
-                }
-            }
+    for scale in [4u32, 3, 2, 1] {
+        let Some(bytes) = rowline_assets::embedded_icons(scale) else {
+            continue;
+        };
+        if let Ok(strip) =
+            rowline_assets::load_icon_strip_bytes(bytes, rowline_app::commands::ICON_COUNT)
+        {
+            return Some(strip);
         }
     }
     None

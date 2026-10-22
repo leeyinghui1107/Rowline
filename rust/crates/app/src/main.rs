@@ -26,7 +26,6 @@
     windows_subsystem = "windows"
 )]
 
-use rowline_assets::AssetLoader;
 use rowline_core::input::Size;
 use rowline_core::layout::Layout;
 use rowline_core::RuleModel;
@@ -248,56 +247,46 @@ mod gpu {
 
         /// Load the sprite sheet at the best variant for the current DPR.
         ///
-        /// The view builder multiplies its texel coordinates by the sheet's
-        /// integer scale, so the loaded scale is recorded on the game.
+        /// The sheet is compiled into the executable, so there is nothing to
+        /// find on disk.  The view builder multiplies its texel coordinates
+        /// by the sheet's integer scale, so the loaded scale is recorded on
+        /// the game.
         fn install_sheet(&mut self) {
-            for root in asset_roots() {
-                let mut loader = rowline_assets::FileAssetLoader::new(&root);
-                let sheet = loader.load_sheet(
-                    &rowline_assets::AssetKey::SpriteSheet,
-                    rowline_assets::GridSpec::ORIGINAL,
-                    self.scale,
-                );
-                match sheet {
-                    Ok(sheet) => {
-                        let image = sheet.image();
-                        if let Some(r) = self.renderer.as_mut() {
-                            r.set_sheet(image.as_raw(), image.width(), image.height());
-                        }
-                        self.game.set_sheet_scale(sheet.scale());
-                        return;
+            let variant =
+                rowline_display::select_variant(&rowline_assets::EMBEDDED_SHEET_SCALES, self.scale)
+                    .unwrap_or(1);
+            match rowline_assets::embedded_sheet_image(variant) {
+                Ok(sheet) => {
+                    let image = sheet.image();
+                    if let Some(r) = self.renderer.as_mut() {
+                        r.set_sheet(image.as_raw(), image.width(), image.height());
                     }
-                    Err(_) => continue,
+                    self.game.set_sheet_scale(sheet.scale());
                 }
+                Err(e) => note!("rowline: cannot decode the embedded sprite sheet: {e}"),
             }
-            note!("rowline: the sprite sheet is missing; run 'make sheet'");
         }
 
         /// Load the icon atlas.
+        ///
+        /// The highest embedded variant wins; the atlas is a strip of square
+        /// cells and is sampled 1:1 at the device resolution.
         fn install_icons(&mut self) {
-            // The highest variant that exists wins; the atlas is a strip of
-            // square cells and is sampled 1:1 at the device resolution.
-            let candidates = ["icons@4x.png", "icons@3x.png", "icons@2x.png", "icons.png"];
-            for root in asset_roots() {
-                let mut done = false;
-                for name in candidates {
-                    let p = root.join("icons").join(name);
-                    if !p.exists() {
-                        continue;
-                    }
-                    match rowline_assets::load_icon_strip(&p, rowline_app::commands::ICON_COUNT) {
-                        Ok(strip) => {
-                            if let Some(r) = self.renderer.as_mut() {
-                                r.set_icons(&strip.pixels, strip.width, strip.height, strip.count);
-                            }
-                            done = true;
-                            break;
+            for scale in [4u32, 3, 2, 1] {
+                let Some(bytes) = rowline_assets::embedded_icons(scale) else {
+                    continue;
+                };
+                match rowline_assets::load_icon_strip_bytes(
+                    bytes,
+                    rowline_app::commands::ICON_COUNT,
+                ) {
+                    Ok(strip) => {
+                        if let Some(r) = self.renderer.as_mut() {
+                            r.set_icons(&strip.pixels, strip.width, strip.height, strip.count);
                         }
-                        Err(e) => note!("rowline: cannot load the icons: {e}"),
+                        return;
                     }
-                }
-                if done {
-                    break;
+                    Err(e) => note!("rowline: cannot decode the embedded icons: {e}"),
                 }
             }
         }
